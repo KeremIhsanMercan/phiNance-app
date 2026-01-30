@@ -1,0 +1,85 @@
+package com.kerem.phinance.service;
+
+import com.kerem.phinance.dto.CategoryDto;
+import com.kerem.phinance.exception.ResourceNotFoundException;
+import com.kerem.phinance.model.Category;
+import com.kerem.phinance.repository.CategoryRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+public class CategoryService {
+
+    private final CategoryRepository categoryRepository;
+
+    public List<CategoryDto> getAllCategories(String userId) {
+        return categoryRepository.findByUserIdOrIsDefaultTrue(userId).stream()
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
+    }
+
+    public List<CategoryDto> getCategoriesByType(String userId, Category.CategoryType type) {
+        return categoryRepository.findByUserIdAndType(userId, type).stream()
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
+    }
+
+    public CategoryDto getCategoryById(String userId, String categoryId) {
+        Category category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category", "id", categoryId));
+        return mapToDto(category);
+    }
+
+    public CategoryDto createCategory(String userId, CategoryDto dto) {
+        Category category = new Category();
+        category.setUserId(userId);
+        category.setName(dto.getName());
+        category.setType(dto.getType());
+        category.setIcon(dto.getIcon());
+        category.setColor(dto.getColor());
+        category.setParentCategoryId(dto.getParentCategoryId());
+
+        Category saved = categoryRepository.save(category);
+        return mapToDto(saved);
+    }
+
+    public CategoryDto updateCategory(String userId, String categoryId, CategoryDto dto) {
+        Category category = categoryRepository.findByIdAndUserId(categoryId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category", "id", categoryId));
+
+        category.setName(dto.getName());
+        category.setType(dto.getType());
+        category.setIcon(dto.getIcon());
+        category.setColor(dto.getColor());
+        category.setParentCategoryId(dto.getParentCategoryId());
+
+        Category saved = categoryRepository.save(category);
+        return mapToDto(saved);
+    }
+
+    public void deleteCategory(String userId, String categoryId) {
+        Category category = categoryRepository.findByIdAndUserId(categoryId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category", "id", categoryId));
+
+        // Delete subcategories
+        List<Category> subcategories = categoryRepository.findByParentCategoryId(categoryId);
+        categoryRepository.deleteAll(subcategories);
+
+        categoryRepository.delete(category);
+    }
+
+    private CategoryDto mapToDto(Category category) {
+        CategoryDto dto = new CategoryDto();
+        dto.setId(category.getId());
+        dto.setName(category.getName());
+        dto.setType(category.getType());
+        dto.setIcon(category.getIcon());
+        dto.setColor(category.getColor());
+        dto.setParentCategoryId(category.getParentCategoryId());
+        return dto;
+    }
+}

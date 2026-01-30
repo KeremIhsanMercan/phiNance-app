@@ -1,0 +1,129 @@
+import axios from 'axios';
+import { useAuthStore } from '../stores/authStore';
+
+const API_URL = '/api';
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor to add auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = useAuthStore.getState().token;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor to handle errors
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      try {
+        const refreshToken = useAuthStore.getState().refreshToken;
+        const response = await axios.post(`${API_URL}/auth/refresh`, {
+          refreshToken,
+        });
+
+        const { accessToken, refreshToken: newRefreshToken } = response.data;
+        useAuthStore.getState().setTokens(accessToken, newRefreshToken);
+
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        useAuthStore.getState().logout();
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// Auth API
+export const authApi = {
+  register: (data) => api.post('/auth/register', data),
+  login: (data) => api.post('/auth/login', data),
+  // Email verification removed: no-op for compatibility
+  verifyEmail: (token) => Promise.resolve({ data: { message: 'Email verification disabled' } }),
+  changePassword: (data) => api.post('/auth/change-password', data),
+  updateProfile: (data) => api.put('/auth/update-profile', data),
+  deleteAccount: (data) => api.post('/auth/delete-account', data),
+};
+
+// Accounts API
+export const accountsApi = {
+  getAll: () => api.get('/accounts'),
+  getById: (id) => api.get(`/accounts/${id}`),
+  create: (data) => api.post('/accounts', data),
+  update: (id, data) => api.put(`/accounts/${id}`, data),
+  archive: (id) => api.delete(`/accounts/${id}`),
+};
+
+// Transactions API
+export const transactionsApi = {
+  getAll: (params) => api.get('/transactions', { params }),
+  getById: (id) => api.get(`/transactions/${id}`),
+  getByDateRange: (startDate, endDate) =>
+    api.get('/transactions/date-range', { params: { startDate, endDate } }),
+  create: (data) => api.post('/transactions', data),
+  update: (id, data) => api.put(`/transactions/${id}`, data),
+  delete: (id) => api.delete(`/transactions/${id}`),
+};
+
+// Categories API
+export const categoriesApi = {
+  getAll: () => api.get('/categories'),
+  getByType: (type) => api.get(`/categories/type/${type}`),
+  getById: (id) => api.get(`/categories/${id}`),
+  create: (data) => api.post('/categories', data),
+  update: (id, data) => api.put(`/categories/${id}`, data),
+  delete: (id) => api.delete(`/categories/${id}`),
+};
+
+// Budgets API
+export const budgetsApi = {
+  getAll: () => api.get('/budgets'),
+  getByMonth: (year, month) => api.get('/budgets', { params: { year, month } }),
+  getById: (id) => api.get(`/budgets/${id}`),
+  compare: (year1, month1, year2, month2) =>
+    api.get('/budgets/compare', { params: { year1, month1, year2, month2 } }),
+  create: (data) => api.post('/budgets', data),
+  update: (id, data) => api.put(`/budgets/${id}`, data),
+  delete: (id) => api.delete(`/budgets/${id}`),
+};
+
+// Goals API
+export const goalsApi = {
+  getAll: () => api.get('/goals'),
+  getActive: () => api.get('/goals/active'),
+  getById: (id) => api.get(`/goals/${id}`),
+  validateDependencies: (id) => api.get(`/goals/${id}/validate-dependencies`),
+  create: (data) => api.post('/goals', data),
+  addContribution: (id, amount) => api.post('/goals/contribution', { goalId: id, amount }),
+  update: (id, data) => api.put(`/goals/${id}`, data),
+  markComplete: (id) => api.put(`/goals/${id}/complete`),
+  delete: (id) => api.delete(`/goals/${id}`),
+};
+
+// Dashboard API
+export const dashboardApi = {
+  getData: () => api.get('/dashboard'),
+};
+
+export default api;
