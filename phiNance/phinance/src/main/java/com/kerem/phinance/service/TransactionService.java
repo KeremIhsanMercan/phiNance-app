@@ -4,7 +4,11 @@ import com.kerem.phinance.dto.TransactionDto;
 import com.kerem.phinance.dto.TransactionFilterDto;
 import com.kerem.phinance.exception.BadRequestException;
 import com.kerem.phinance.exception.ResourceNotFoundException;
+import com.kerem.phinance.model.Goal;
+import com.kerem.phinance.model.GoalContribution;
 import com.kerem.phinance.model.Transaction;
+import com.kerem.phinance.repository.GoalContributionRepository;
+import com.kerem.phinance.repository.GoalRepository;
 import com.kerem.phinance.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -26,11 +30,19 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountService accountService;
     private final BudgetService budgetService;
+    private final GoalContributionRepository goalContributionRepository;
+    private final GoalRepository goalRepository;
 
     public Page<TransactionDto> getTransactions(String userId, TransactionFilterDto filter) {
-        Sort sort = filter.getSortDirection().equalsIgnoreCase("desc")
-                ? Sort.by(filter.getSortBy()).descending()
-                : Sort.by(filter.getSortBy()).ascending();
+        // Sort by date descending, then by updatedAt descending for same-date transactions
+        Sort sort = Sort.by(Sort.Order.desc("date"), Sort.Order.desc("updatedAt"));
+
+        // If user specified a different sort, use that instead
+        if (filter.getSortBy() != null && !filter.getSortBy().equals("date")) {
+            sort = filter.getSortDirection().equalsIgnoreCase("desc")
+                    ? Sort.by(filter.getSortBy()).descending()
+                    : Sort.by(filter.getSortBy()).ascending();
+        }
 
         Pageable pageable = PageRequest.of(filter.getPage(), filter.getSize(), sort);
 
@@ -70,15 +82,20 @@ public class TransactionService {
             if (!accountService.accountBelongsToUser(dto.getTransferToAccountId(), userId)) {
                 throw new BadRequestException("Destination account does not belong to user");
             }
+            if (dto.getAccountId().equals(dto.getTransferToAccountId())) {
+                throw new BadRequestException("Source and destination accounts must be different");
+            }
             transaction.setTransferToAccountId(dto.getTransferToAccountId());
 
-            // Create linked transaction for the destination account
-            Transaction linkedTransaction = createLinkedTransaction(userId, dto);
-            transaction.setLinkedTransactionId(linkedTransaction.getId());
+            // Update both account balances
+            // Deduct from source account
+            accountService.updateBalance(dto.getAccountId(), dto.getAmount(), false);
+            // Add to destination account
+            accountService.updateBalance(dto.getTransferToAccountId(), dto.getAmount(), true);
+        } else {
+            // Update account balance for non-transfer transactions
+            updateAccountBalance(transaction);
         }
-
-        // Update account balance
-        updateAccountBalance(transaction);
 
         // Update budget if expense
         if (dto.getType() == Transaction.TransactionType.EXPENSE && dto.getCategoryId() != null) {
@@ -94,7 +111,13 @@ public class TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", "id", transactionId));
 
         // Reverse the previous balance change
-        reverseAccountBalance(transaction);
+        if (transaction.getType() == Transaction.TransactionType.TRANSFER) {
+            // Reverse old transfer
+            accountService.updateBalance(transaction.getAccountId(), transaction.getAmount(), true);
+            accountService.updateBalance(transaction.getTransferToAccountId(), transaction.getAmount(), false);
+        } else {
+            reverseAccountBalance(transaction);
+        }
 
         // Update transaction
         transaction.setAmount(dto.getAmount());
@@ -106,7 +129,13 @@ public class TransactionService {
         transaction.setAttachmentUrls(dto.getAttachmentUrls());
 
         // Apply new balance change
-        updateAccountBalance(transaction);
+        if (transaction.getType() == Transaction.TransactionType.TRANSFER) {
+            // Apply new transfer
+            accountService.updateBalance(transaction.getAccountId(), dto.getAmount(), false);
+            accountService.updateBalance(transaction.getTransferToAccountId(), dto.getAmount(), true);
+        } else {
+            updateAccountBalance(transaction);
+        }
 
         Transaction saved = transactionRepository.save(transaction);
         return mapToDto(saved);
@@ -116,12 +145,35 @@ public class TransactionService {
         Transaction transaction = transactionRepository.findByIdAndUserId(transactionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", "id", transactionId));
 
-        // Reverse the balance change
-        reverseAccountBalance(transaction);
+        // Reverse the balance changes
+        if (transaction.getType() == Transaction.TransactionType.TRANSFER) {
+            // Reverse transfer: add back to source, deduct from destination
+            accountService.updateBalance(transaction.getAccountId(), transaction.getAmount(), true);
+            accountService.updateBalance(transaction.getTransferToAccountId(), transaction.getAmount(), false);
+        } else {
+            reverseAccountBalance(transaction);
+        }
 
-        // Delete linked transaction if exists
-        if (transaction.getLinkedTransactionId() != null) {
-            transactionRepository.deleteById(transaction.getLinkedTransactionId());
+        // Subtract from budget if expense
+        if (transaction.getType() == Transaction.TransactionType.EXPENSE && transaction.getCategoryId() != null) {
+            budgetService.updateSpentAmount(userId, transaction.getCategoryId(), transaction.getAmount().negate(), transaction.getDate());
+        }
+
+        // Revert goal contribution if this is a goal contribution transaction
+        GoalContribution contribution = goalContributionRepository.findByTransactionId(transactionId);
+        if (contribution != null) {
+            Goal goal = goalRepository.findById(contribution.getGoalId()).orElse(null);
+            if (goal != null) {
+                // Revert goal progress
+                goal.setCurrentAmount(goal.getCurrentAmount().subtract(contribution.getAmount()));
+                // Unmark as completed if it was completed
+                if (goal.isCompleted() && goal.getCurrentAmount().compareTo(goal.getTargetAmount()) < 0) {
+                    goal.setCompleted(false);
+                }
+                goalRepository.save(goal);
+            }
+            // Delete the contribution record
+            goalContributionRepository.delete(contribution);
         }
 
         transactionRepository.delete(transaction);
@@ -131,23 +183,6 @@ public class TransactionService {
         return transactionRepository.findByUserIdAndDateBetween(userId, startDate, endDate).stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
-    }
-
-    private Transaction createLinkedTransaction(String userId, TransactionDto dto) {
-        Transaction linked = new Transaction();
-        linked.setUserId(userId);
-        linked.setAccountId(dto.getTransferToAccountId());
-        linked.setType(Transaction.TransactionType.INCOME);
-        linked.setAmount(dto.getAmount());
-        linked.setDescription("Transfer from account");
-        linked.setDate(dto.getDate());
-
-        Transaction saved = transactionRepository.save(linked);
-
-        // Update destination account balance
-        accountService.updateBalance(dto.getTransferToAccountId(), dto.getAmount(), true);
-
-        return saved;
     }
 
     private void updateAccountBalance(Transaction transaction) {

@@ -27,6 +27,8 @@ public class GoalContribution {
 
     private String note;
 
+    private String transactionId;
+
     @CreatedDate
     private LocalDateTime createdAt;
 }

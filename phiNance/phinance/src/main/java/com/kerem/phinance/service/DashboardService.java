@@ -31,7 +31,7 @@ public class DashboardService {
     public DashboardDto getDashboard(String userId) {
         // Get all active accounts
         List<Account> accounts = accountRepository.findByUserIdAndArchivedFalse(userId);
-        
+
         // Calculate total net worth
         BigDecimal totalNetWorth = accounts.stream()
                 .map(Account::getCurrentBalance)
@@ -41,7 +41,7 @@ public class DashboardService {
         YearMonth currentMonth = YearMonth.now();
         LocalDate startOfMonth = currentMonth.atDay(1);
         LocalDate endOfMonth = currentMonth.atEndOfMonth();
-        
+
         List<Transaction> currentMonthTransactions = transactionRepository
                 .findByUserIdAndDateBetween(userId, startOfMonth, endOfMonth);
 
@@ -59,12 +59,13 @@ public class DashboardService {
         // Get account summaries
         List<DashboardDto.AccountSummary> accountSummaries = accounts.stream()
                 .map(a -> DashboardDto.AccountSummary.builder()
-                        .id(a.getId())
-                        .name(a.getName())
-                        .type(a.getType().name())
-                        .balance(a.getCurrentBalance())
-                        .currency(a.getCurrency())
-                        .build())
+                .id(a.getId())
+                .name(a.getName())
+                .type(a.getType().name())
+                .balance(a.getCurrentBalance())
+                .currency(a.getCurrency())
+                .color(a.getColor())
+                .build())
                 .collect(Collectors.toList());
 
         // Get category expenses
@@ -94,12 +95,12 @@ public class DashboardService {
 
     private List<DashboardDto.CategoryExpense> calculateCategoryExpenses(
             String userId, List<Transaction> transactions, BigDecimal totalExpenses) {
-        
+
+        // Group expenses by category (including null for uncategorized)
         Map<String, BigDecimal> expensesByCategory = transactions.stream()
                 .filter(t -> t.getType() == Transaction.TransactionType.EXPENSE)
-                .filter(t -> t.getCategoryId() != null)
                 .collect(Collectors.groupingBy(
-                        Transaction::getCategoryId,
+                        t -> t.getCategoryId() != null ? t.getCategoryId() : "uncategorized",
                         Collectors.reducing(BigDecimal.ZERO, Transaction::getAmount, BigDecimal::add)));
 
         List<Category> categories = categoryRepository.findByUserIdOrIsDefaultTrue(userId);
@@ -108,11 +109,23 @@ public class DashboardService {
 
         return expensesByCategory.entrySet().stream()
                 .map(entry -> {
-                    Category category = categoryMap.get(entry.getKey());
-                    double percentage = totalExpenses.compareTo(BigDecimal.ZERO) == 0 ? 0 :
-                            entry.getValue().divide(totalExpenses, 4, RoundingMode.HALF_UP)
+                    String categoryId = entry.getKey();
+                    Category category = categoryMap.get(categoryId);
+                    double percentage = totalExpenses.compareTo(BigDecimal.ZERO) == 0 ? 0
+                            : entry.getValue().divide(totalExpenses, 4, RoundingMode.HALF_UP)
                                     .multiply(BigDecimal.valueOf(100)).doubleValue();
-                    
+
+                    // Handle uncategorized expenses
+                    if ("uncategorized".equals(categoryId)) {
+                        return DashboardDto.CategoryExpense.builder()
+                                .categoryId(null)
+                                .categoryName("Uncategorized")
+                                .color("#9CA3AF") // gray-400
+                                .amount(entry.getValue())
+                                .percentage(percentage)
+                                .build();
+                    }
+
                     return DashboardDto.CategoryExpense.builder()
                             .categoryId(entry.getKey())
                             .categoryName(category != null ? category.getName() : "Unknown")

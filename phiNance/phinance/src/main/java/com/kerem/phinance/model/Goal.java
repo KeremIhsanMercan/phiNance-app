@@ -43,6 +43,8 @@ public class Goal {
 
     private boolean completed = false;
 
+    private String savingsAccountId;
+
     private String color;
 
     private String icon;

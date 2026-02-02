@@ -13,32 +13,40 @@ import java.util.Optional;
 
 @Repository
 public interface TransactionRepository extends MongoRepository<Transaction, String> {
-    
+
     Page<Transaction> findByUserId(String userId, Pageable pageable);
-    
+
     List<Transaction> findByUserIdAndAccountId(String userId, String accountId);
-    
+
     Optional<Transaction> findByIdAndUserId(String id, String userId);
-    
+
+    @Query("{ 'userId': ?0, 'date': { $gte: ?1, $lte: ?2 } }")
     List<Transaction> findByUserIdAndDateBetween(String userId, LocalDate startDate, LocalDate endDate);
-    
+
     List<Transaction> findByUserIdAndCategoryId(String userId, String categoryId);
-    
+
     @Query("{ 'userId': ?0, 'date': { $gte: ?1, $lte: ?2 }, 'type': ?3 }")
     List<Transaction> findByUserIdAndDateBetweenAndType(
-            String userId, 
-            LocalDate startDate, 
-            LocalDate endDate, 
+            String userId,
+            LocalDate startDate,
+            LocalDate endDate,
             Transaction.TransactionType type);
-    
+
     @Query("{ 'userId': ?0, 'categoryId': ?1, 'date': { $gte: ?2, $lte: ?3 } }")
     List<Transaction> findByUserIdAndCategoryIdAndDateBetween(
-            String userId, 
-            String categoryId, 
-            LocalDate startDate, 
+            String userId,
+            String categoryId,
+            LocalDate startDate,
             LocalDate endDate);
-    
+
     List<Transaction> findByRecurringTrueAndDate(LocalDate date);
-    
+
+    List<Transaction> findByRecurringTrue();
+
+    List<Transaction> findByUserId(String userId);
+
     void deleteByIdAndUserId(String id, String userId);
+
+    @Query("{ 'userId': ?0, $or: [{ 'accountId': ?1 }, { 'transferToAccountId': ?2 }] }")
+    List<Transaction> findByUserIdAndAccountIdOrTransferToAccountId(String userId, String accountId, String transferToAccountId);
 }

@@ -4,6 +4,7 @@ import com.kerem.phinance.model.Transaction;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -14,6 +15,7 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class TransactionDto {
 
     private String id;
@@ -35,6 +37,7 @@ public class TransactionDto {
     @NotNull(message = "Date is required")
     private LocalDate date;
 
+    @Builder.Default
     private boolean recurring = false;
 
     private Transaction.RecurrencePattern recurrencePattern;

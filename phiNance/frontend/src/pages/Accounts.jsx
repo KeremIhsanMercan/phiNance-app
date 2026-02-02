@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { useAccountsStore } from '../stores/accountsStore';
+import { useAuthStore } from '../stores/authStore';
+import { useCurrencyFormatter } from '../utils/currency';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -16,30 +18,41 @@ import {
   CurrencyDollarIcon,
   ChartBarIcon,
 } from '@heroicons/react/24/outline';
+import { FaPiggyBank } from 'react-icons/fa';
 
 const accountTypes = [
   { value: 'BANK_ACCOUNT', label: 'Bank Account', icon: BuildingLibraryIcon },
   { value: 'CREDIT_CARD', label: 'Credit Card', icon: CreditCardIcon },
   { value: 'CASH', label: 'Cash', icon: BanknotesIcon },
   { value: 'INVESTMENT_ACCOUNT', label: 'Investment', icon: ChartBarIcon },
+  { value: 'SAVINGS', label: 'Savings', icon: FaPiggyBank },
 ];
 
-const currencies = ['USD', 'EUR', 'TRY', 'GBP', 'JPY', 'CAD', 'AUD'];
-
 const colors = [
-  '#f59e0b', '#d97706', '#3b82f6', '#8b5cf6', '#ec4899',
-  '#06b6d4', '#ef4444', '#84cc16', '#6366f1', '#14b8a6',
+  '#f59e0b',
+  '#C57F08',
+  '#c5b23a',
+  '#8ed334',
+  '#6ee772',
+  '#60f0fa',
+  '#3B82F6',
+  '#A78BFA',
+  '#F472B6',
+  '#EF4444',
 ];
 
 export default function Accounts() {
   const { accounts, loading, fetchAccounts, createAccount, updateAccount, archiveAccount } =
     useAccountsStore();
+  const { user } = useAuthStore();
+  const formatCurrency = useCurrencyFormatter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [deletingAccountId, setDeletingAccountId] = useState(null);
-
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
+  
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm();
+  const selectedColor = watch('color', colors[0]);
 
   useEffect(() => {
     fetchAccounts();
@@ -50,7 +63,6 @@ export default function Accounts() {
     reset({
       name: '',
       type: 'BANK_ACCOUNT',
-      initialBalance: '',
       currency: 'USD',
       description: '',
       color: '#f59e0b',
@@ -64,7 +76,6 @@ export default function Accounts() {
       name: account.name,
       type: account.type,
       initialBalance: account.initialBalance,
-      currency: account.currency,
       description: account.description || '',
       color: account.color || '#22c55e',
     });
@@ -79,15 +90,24 @@ export default function Accounts() {
 
   const onSubmit = async (data) => {
     try {
-      const payload = {
-        ...data,
-        initialBalance: parseFloat(data.initialBalance),
-      };
-
+      let payload;
+      
       if (editingAccount) {
+        // When editing, exclude initialBalance and currency (they can't be changed)
+        payload = {
+          name: data.name,
+          type: data.type,
+          description: data.description,
+          color: data.color,
+        };
         await updateAccount(editingAccount.id, payload);
         toast.success('Account updated successfully');
       } else {
+        // When creating, include all fields
+        payload = {
+          ...data,
+          initialBalance: parseFloat(data.initialBalance),
+        };
         await createAccount(payload);
         toast.success('Account created successfully');
       }
@@ -106,13 +126,6 @@ export default function Accounts() {
     } catch (error) {
       toast.error('Failed to archive account');
     }
-  };
-
-  const formatCurrency = (amount, currency) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'USD',
-    }).format(amount || 0);
   };
 
   const getAccountIcon = (type) => {
@@ -174,36 +187,38 @@ export default function Accounts() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => openEditModal(account)}
-                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
-                    >
-                      <PencilIcon className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setDeletingAccountId(account.id);
-                        setIsDeleteDialogOpen(true);
-                      }}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                    </button>
-                  </div>
+                  {account.type !== 'SAVINGS' && (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => openEditModal(account)}
+                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+                      >
+                        <PencilIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeletingAccountId(account.id);
+                          setIsDeleteDialogOpen(true);
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Current Balance</span>
+                    <span className="text-gray-500">Balance</span>
                     <span className="font-semibold text-gray-900">
-                      {formatCurrency(account.currentBalance, account.currency)}
+                      {formatCurrency(account.currentBalance)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Initial Balance</span>
+                    <span className="text-gray-500">Description</span>
                     <span className="text-gray-600">
-                      {formatCurrency(account.initialBalance, account.currency)}
+                      {account.description || '-'}
                     </span>
                   </div>
                 </div>
@@ -247,35 +262,21 @@ export default function Accounts() {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Initial Balance
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                {...register('initialBalance', { required: 'Initial balance is required' })}
-                className="input-field"
-                placeholder="0.00"
-              />
-              {errors.initialBalance && (
-                <p className="mt-1 text-sm text-red-600">{errors.initialBalance.message}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Currency
-              </label>
-              <select {...register('currency')} className="input-field">
-                {currencies.map((currency) => (
-                  <option key={currency} value={currency}>
-                    {currency}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Initial Balance
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              {...register('initialBalance', { required: 'Initial balance is required' })}
+              className="input-field"
+              placeholder="0.00"
+              disabled={!!editingAccount}
+            />
+            {errors.initialBalance && (
+              <p className="mt-1 text-sm text-red-600">{errors.initialBalance.message}</p>
+            )}
           </div>
 
           <div>
@@ -293,13 +294,17 @@ export default function Accounts() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Color
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {colors.map((color) => (
                 <button
                   key={color}
                   type="button"
                   onClick={() => setValue('color', color)}
-                  className="w-8 h-8 rounded-full border-2 border-transparent hover:border-gray-300"
+                  className={`w-8 h-8 rounded-full border-2 transition-all ${
+                    selectedColor === color
+                      ? 'border-gray-900 scale-110'
+                      : 'border-transparent hover:border-gray-300'
+                  }`}
                   style={{ backgroundColor: color }}
                 />
               ))}

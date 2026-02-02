@@ -50,6 +50,7 @@ public class Account {
         BANK_ACCOUNT,
         CREDIT_CARD,
         CASH,
-        INVESTMENT_ACCOUNT
+        INVESTMENT_ACCOUNT,
+        SAVINGS
     }
 }

@@ -27,11 +27,13 @@ public class DashboardDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class AccountSummary {
+
         private String id;
         private String name;
         private String type;
         private BigDecimal balance;
         private String currency;
+        private String color;
     }
 
     @Data
@@ -39,6 +41,7 @@ public class DashboardDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class CategoryExpense {
+
         private String categoryId;
         private String categoryName;
         private String color;
@@ -51,6 +54,7 @@ public class DashboardDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class MonthlyData {
+
         private String month;
         private BigDecimal income;
         private BigDecimal expenses;

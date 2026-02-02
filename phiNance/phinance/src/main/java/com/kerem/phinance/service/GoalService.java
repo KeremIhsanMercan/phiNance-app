@@ -2,16 +2,22 @@ package com.kerem.phinance.service;
 
 import com.kerem.phinance.dto.GoalContributionDto;
 import com.kerem.phinance.dto.GoalDto;
+import com.kerem.phinance.dto.TransactionDto;
 import com.kerem.phinance.exception.BadRequestException;
 import com.kerem.phinance.exception.ResourceNotFoundException;
+import com.kerem.phinance.model.Account;
 import com.kerem.phinance.model.Goal;
 import com.kerem.phinance.model.GoalContribution;
+import com.kerem.phinance.model.Transaction;
+import com.kerem.phinance.repository.AccountRepository;
 import com.kerem.phinance.repository.GoalContributionRepository;
 import com.kerem.phinance.repository.GoalRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -21,6 +27,9 @@ public class GoalService {
 
     private final GoalRepository goalRepository;
     private final GoalContributionRepository contributionRepository;
+    private final AccountRepository accountRepository;
+    private final TransactionService transactionService;
+    private final AccountService accountService;
 
     public List<GoalDto> getAllGoals(String userId) {
         return goalRepository.findByUserId(userId).stream()
@@ -41,6 +50,21 @@ public class GoalService {
     }
 
     public GoalDto createGoal(String userId, GoalDto dto) {
+        // Create a SAVINGS account for this goal
+        Account savingsAccount = new Account();
+        savingsAccount.setUserId(userId);
+        savingsAccount.setName(dto.getName());
+        savingsAccount.setType(Account.AccountType.SAVINGS);
+        savingsAccount.setInitialBalance(BigDecimal.ZERO);
+        savingsAccount.setCurrentBalance(BigDecimal.ZERO);
+        savingsAccount.setCurrency("USD");
+        savingsAccount.setColor(dto.getColor() != null ? dto.getColor() : "#3B82F6");
+        savingsAccount.setIcon(dto.getIcon());
+        savingsAccount.setDescription("Savings account for goal: " + dto.getName());
+
+        Account savedAccount = accountRepository.save(savingsAccount);
+
+        // Create the goal with the savings account ID
         Goal goal = new Goal();
         goal.setUserId(userId);
         goal.setName(dto.getName());
@@ -50,7 +74,8 @@ public class GoalService {
         goal.setPriority(dto.getPriority());
         goal.setAccountId(dto.getAccountId());
         goal.setDependencyGoalIds(dto.getDependencyGoalIds());
-        goal.setColor(dto.getColor());
+        goal.setSavingsAccountId(savedAccount.getId());
+        goal.setColor(dto.getColor() != null ? dto.getColor() : "#3B82F6");
         goal.setIcon(dto.getIcon());
 
         Goal saved = goalRepository.save(goal);
@@ -61,6 +86,25 @@ public class GoalService {
         Goal goal = goalRepository.findByIdAndUserId(goalId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", goalId));
 
+        // Update savings account if name or color changed
+        if (goal.getSavingsAccountId() != null) {
+            Account account = accountRepository.findById(goal.getSavingsAccountId()).orElse(null);
+            if (account != null) {
+                boolean accountUpdated = false;
+                if (!goal.getName().equals(dto.getName())) {
+                    account.setName(dto.getName());
+                    accountUpdated = true;
+                }
+                if (dto.getColor() != null && !dto.getColor().equals(account.getColor())) {
+                    account.setColor(dto.getColor());
+                    accountUpdated = true;
+                }
+                if (accountUpdated) {
+                    accountRepository.save(account);
+                }
+            }
+        }
+
         goal.setName(dto.getName());
         goal.setDescription(dto.getDescription());
         goal.setTargetAmount(dto.getTargetAmount());
@@ -68,7 +112,9 @@ public class GoalService {
         goal.setPriority(dto.getPriority());
         goal.setAccountId(dto.getAccountId());
         goal.setDependencyGoalIds(dto.getDependencyGoalIds());
-        goal.setColor(dto.getColor());
+        if (dto.getColor() != null) {
+            goal.setColor(dto.getColor());
+        }
         goal.setIcon(dto.getIcon());
 
         Goal saved = goalRepository.save(goal);
@@ -85,6 +131,11 @@ public class GoalService {
             throw new BadRequestException("Cannot delete goal with dependent goals");
         }
 
+        // Archive the associated savings account
+        if (goal.getSavingsAccountId() != null) {
+            accountService.archiveAccount(userId, goal.getSavingsAccountId());
+        }
+
         goalRepository.delete(goal);
     }
 
@@ -92,12 +143,29 @@ public class GoalService {
         Goal goal = goalRepository.findByIdAndUserId(dto.getGoalId(), userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", dto.getGoalId()));
 
-        // Create contribution record
+        // Create TRANSFER transaction to the savings account
+        LocalDate today = LocalDate.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+        String description = today.format(formatter) + " " + goal.getName() + " Contribution";
+
+        TransactionDto transactionDto = new TransactionDto();
+        transactionDto.setAccountId(dto.getAccountId());
+        transactionDto.setType(Transaction.TransactionType.TRANSFER);
+        transactionDto.setAmount(dto.getAmount());
+        transactionDto.setTransferToAccountId(goal.getSavingsAccountId());
+        transactionDto.setDescription(description);
+        transactionDto.setDate(today);
+        transactionDto.setRecurring(false);
+
+        TransactionDto createdTransaction = transactionService.createTransaction(userId, transactionDto);
+
+        // Create contribution record with transaction ID
         GoalContribution contribution = new GoalContribution();
         contribution.setGoalId(dto.getGoalId());
         contribution.setUserId(userId);
         contribution.setAmount(dto.getAmount());
         contribution.setNote(dto.getNote());
+        contribution.setTransactionId(createdTransaction.getId());
         contributionRepository.save(contribution);
 
         // Update goal current amount
@@ -162,6 +230,7 @@ public class GoalService {
         dto.setAccountId(goal.getAccountId());
         dto.setDependencyGoalIds(goal.getDependencyGoalIds());
         dto.setCompleted(goal.isCompleted());
+        dto.setSavingsAccountId(goal.getSavingsAccountId());
         dto.setColor(goal.getColor());
         dto.setIcon(goal.getIcon());
         dto.setProgressPercentage(goal.getProgressPercentage());

@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { useTransactionsStore } from '../stores/transactionsStore';
 import { useAccountsStore } from '../stores/accountsStore';
 import { categoriesApi } from '../services/api';
+import { useCurrencyFormatter } from '../utils/currency';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -131,12 +132,7 @@ export default function Transactions() {
     }
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount || 0);
-  };
+  const formatCurrency = useCurrencyFormatter();
 
   const getTransactionStyle = (type) => {
     return transactionTypes.find((t) => t.value === type) || transactionTypes[1];
@@ -146,7 +142,12 @@ export default function Transactions() {
     return accounts.find((a) => a.id === accountId)?.name || 'Unknown';
   };
 
-  const getCategoryName = (categoryId) => {
+  const getCategoryName = (categoryId, transaction) => {
+    // For transfers, show "to {destination account name}"
+    if (transaction?.type === 'TRANSFER' && transaction?.transferToAccountId) {
+      const destinationAccount = accounts.find((a) => a.id === transaction.transferToAccountId);
+      return destinationAccount ? `to ${destinationAccount.name}` : 'to Unknown';
+    }
     return categories.find((c) => c.id === categoryId)?.name || '-';
   };
 
@@ -214,10 +215,9 @@ export default function Transactions() {
                         {getAccountName(transaction.accountId)}
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-600">
-                        {getCategoryName(transaction.categoryId)}
+                        {getCategoryName(transaction.categoryId, transaction)}
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate">
-                        {transaction.description || '-'}
+                      <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate">{transaction.description || '-'}
                       </td>
                       <td className={`py-3 px-4 text-sm font-medium text-right ${style.color}`}>
                         {transaction.type === 'EXPENSE' ? '-' : ''}
@@ -287,7 +287,26 @@ export default function Transactions() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-            <select {...register('type')} className="input-field">
+            <select disabled={editingTransaction !== null} 
+            {...register('type')
+              // if changed to TRANSFER, clear categoryId, clear recurring
+              } onChange={(e) => {
+                const value = e.target.value;
+                if (value === 'TRANSFER') {
+                  reset({
+                    ...watch(),
+                    type: 'TRANSFER',
+                    categoryId: '',
+                    recurring: false,
+                  });
+                } else if (watchType === 'TRANSFER') {
+                  reset({
+                    ...watch(),
+                    type: value,
+                  });
+                }
+              }
+            } className="input-field">
               {transactionTypes.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
@@ -324,11 +343,11 @@ export default function Transactions() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Account</label>
             <select
-              {...register('accountId', { required: 'Account is required' })}
+              {...register('accountId', { required: 'Account is required' })} disabled={editingTransaction !== null}
               className="input-field"
             >
               <option value="">Select account</option>
-              {accounts.map((account) => (
+              {accounts.filter((account) => account.type !== 'SAVINGS').map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.name}
                 </option>
@@ -345,10 +364,11 @@ export default function Transactions() {
                 {...register('transferToAccountId', {
                   required: watchType === 'TRANSFER' ? 'Destination account is required' : false,
                 })}
+                disabled={editingTransaction !== null}
                 className="input-field"
               >
                 <option value="">Select destination</option>
-                {accounts.map((account) => (
+                {accounts.filter((account) => account.type !== 'SAVINGS').map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.name}
                   </option>
@@ -391,9 +411,10 @@ export default function Transactions() {
               type="checkbox"
               id="recurring"
               {...register('recurring')}
-              className="h-4 w-4 text-primary-600 rounded"
+              className="h-4 w-4 text-primary-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={editingTransaction !== null || watchType === 'TRANSFER'}
             />
-            <label htmlFor="recurring" className="text-sm text-gray-700">
+            <label htmlFor="recurring" className={`text-sm ${editingTransaction ? 'text-gray-400' : 'text-gray-700'}`}>
               Recurring transaction
             </label>
           </div>

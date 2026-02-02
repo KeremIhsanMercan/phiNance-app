@@ -2,12 +2,14 @@ package com.kerem.phinance;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
+@EnableScheduling
 public class PhinanceApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(PhinanceApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(PhinanceApplication.class, args);
+    }
 
 }

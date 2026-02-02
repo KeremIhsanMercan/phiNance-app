@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { budgetsApi, categoriesApi } from '../services/api';
+import { useCurrencyFormatter } from '../utils/currency';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -118,15 +119,14 @@ export default function Budgets() {
     }
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount || 0);
-  };
+  const formatCurrency = useCurrencyFormatter();
 
   const getCategoryName = (categoryId) => {
     return categories.find((c) => c.id === categoryId)?.name || 'Unknown';
+  };
+
+  const getCategoryColor = (categoryId) => {
+    return categories.find((c) => c.id === categoryId)?.color || '#6366f1';
   };
 
   const getProgressColor = (percentage) => {
@@ -173,9 +173,20 @@ export default function Budgets() {
             );
             const isOverBudget = budget.spentAmount > budget.allocatedAmount;
             const isNearLimit = spentPercentage >= budget.alertThreshold;
+            const categoryColor = getCategoryColor(budget.categoryId);
 
             return (
-              <div key={budget.id} className="card">
+              <div 
+                key={budget.id} 
+                className="card"
+                style={{
+                  border: isOverBudget 
+                    ? '2px solid #ef4444' 
+                    : isNearLimit 
+                    ? '2px solid #eab308' 
+                    : undefined
+                }}
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="font-semibold text-gray-900">
@@ -185,7 +196,7 @@ export default function Budgets() {
                   </div>
                   <div className="flex gap-1">
                     {(isOverBudget || isNearLimit) && (
-                      <div className="p-2 text-yellow-500">
+                      <div className="p-2" style={{ color: isOverBudget ? '#ef4444' : '#eab308' }}>
                         <ExclamationTriangleIcon className="h-5 w-5" />
                       </div>
                     )}
@@ -210,17 +221,20 @@ export default function Budgets() {
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Spent</span>
-                    <span className={isOverBudget ? 'text-red-600 font-semibold' : 'text-gray-900'}>
+                    <span style={{
+                      color: categoryColor
+                    }}>
                       {formatCurrency(budget.spentAmount)}
                     </span>
                   </div>
 
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
-                      className={`h-2 rounded-full transition-all ${getProgressColor(
-                        spentPercentage
-                      )}`}
-                      style={{ width: `${Math.min(spentPercentage, 100)}%` }}
+                      className={`h-2 rounded-full transition-all`}
+                      style={{ 
+                        width: `${Math.min(spentPercentage, 100)}%`,
+                        backgroundColor: categoryColor
+                      }}
                     />
                   </div>
 
@@ -233,12 +247,10 @@ export default function Budgets() {
 
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Remaining</span>
-                    <span
-                      className={
-                        budget.allocatedAmount - budget.spentAmount >= 0
-                          ? 'text-primary-600'
-                          : 'text-red-600'
-                      }
+                    <span className={isOverBudget ? 'font-semibold' : ''}
+                      style={{
+                        color: isOverBudget ? '#ef4444' : categoryColor
+                      }}
                     >
                       {formatCurrency(budget.allocatedAmount - budget.spentAmount)}
                     </span>
@@ -324,7 +336,7 @@ export default function Budgets() {
               placeholder="80"
             />
             <p className="mt-1 text-xs text-gray-500">
-              You'll be alerted when spending reaches this percentage
+              You'll be warned when spending reaches this percentage of the budget.
             </p>
             {errors.alertThreshold && (
               <p className="mt-1 text-sm text-red-600">{errors.alertThreshold.message}</p>

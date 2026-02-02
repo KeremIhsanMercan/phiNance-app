@@ -42,27 +42,27 @@ PhiNance helps users manage their personal finances by tracking accounts, transa
 
 ```
 phiNance/
-??? frontend/              # React frontend application
-?   ??? src/
-?   ?   ??? components/   # Reusable UI components
-?   ?   ??? pages/        # Page components
-?   ?   ??? services/     # API services
-?   ?   ??? stores/       # State management
-?   ??? README.md
-?
-??? phinance/              # Spring Boot backend
-?   ??? src/main/java/com/kerem/phinance/
-?   ?   ??? config/       # Security, CORS, OpenAPI configs
-?   ?   ??? controller/   # REST controllers
-?   ?   ??? dto/          # Data transfer objects
-?   ?   ??? exception/    # Exception handling
-?   ?   ??? model/        # Entity classes
-?   ?   ??? repository/   # MongoDB repositories
-?   ?   ??? security/     # JWT authentication
-?   ?   ??? service/      # Business logic
-?   ??? README.md
-?
-??? HOMEWORK_ASSIGNMENT.md # Project requirements
+ frontend/              # React frontend application
+    src/
+       components/   # Reusable UI components
+       pages/        # Page components
+       services/     # API services
+       stores/       # State management
+    README.md
+
+ phinance/              # Spring Boot backend
+    src/main/java/com/kerem/phinance/
+       config/       # Security, CORS, OpenAPI configs
+       controller/   # REST controllers
+       dto/          # Data transfer objects
+       exception/    # Exception handling
+       model/        # Entity classes
+       repository/   # MongoDB repositories
+       security/     # JWT authentication
+       service/      # Business logic
+    README.md
+
+ HOMEWORK_ASSIGNMENT.md # Project requirements
 ```
 
 ## Prerequisites

@@ -32,5 +32,7 @@ public class BudgetDto {
     @NotNull(message = "Month is required")
     private Integer month;
 
+    private Integer alertThreshold;
+
     private Double spentPercentage;
 }

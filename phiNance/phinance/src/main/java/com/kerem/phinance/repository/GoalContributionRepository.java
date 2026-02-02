@@ -8,8 +8,10 @@ import java.util.List;
 
 @Repository
 public interface GoalContributionRepository extends MongoRepository<GoalContribution, String> {
-    
+
     List<GoalContribution> findByGoalId(String goalId);
-    
+
     List<GoalContribution> findByUserId(String userId);
+
+    GoalContribution findByTransactionId(String transactionId);
 }

@@ -1,6 +1,7 @@
 package com.kerem.phinance.controller;
 
 import com.kerem.phinance.dto.AccountDto;
+import com.kerem.phinance.dto.UpdateAccountDto;
 import com.kerem.phinance.security.UserPrincipal;
 import com.kerem.phinance.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,7 +53,7 @@ public class AccountController {
     public ResponseEntity<AccountDto> updateAccount(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable String id,
-            @Valid @RequestBody AccountDto dto) {
+            @Valid @RequestBody UpdateAccountDto dto) {
         return ResponseEntity.ok(accountService.updateAccount(userPrincipal.getId(), id, dto));
     }
 

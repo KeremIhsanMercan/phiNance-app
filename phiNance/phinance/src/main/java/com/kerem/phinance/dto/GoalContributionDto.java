@@ -22,5 +22,8 @@ public class GoalContributionDto {
     @Positive(message = "Amount must be positive")
     private BigDecimal amount;
 
+    @NotNull(message = "Account ID is required")
+    private String accountId;
+
     private String note;
 }

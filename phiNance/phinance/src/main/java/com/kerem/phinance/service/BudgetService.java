@@ -3,8 +3,10 @@ package com.kerem.phinance.service;
 import com.kerem.phinance.dto.BudgetDto;
 import com.kerem.phinance.exception.ResourceNotFoundException;
 import com.kerem.phinance.model.Budget;
+import com.kerem.phinance.model.Transaction;
 import com.kerem.phinance.model.User;
 import com.kerem.phinance.repository.BudgetRepository;
+import com.kerem.phinance.repository.TransactionRepository;
 import com.kerem.phinance.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ import java.util.stream.Collectors;
 public class BudgetService {
 
     private final BudgetRepository budgetRepository;
+    private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
 
     public List<BudgetDto> getBudgetsByMonth(String userId, int year, int month) {
@@ -43,12 +46,28 @@ public class BudgetService {
             return updateBudget(userId, existing.get().getId(), dto);
         }
 
+        // Get existing transactions in this category for the given month
+        LocalDate startOfMonth = LocalDate.of(dto.getYear(), dto.getMonth(), 1);
+        LocalDate endOfMonth = startOfMonth.plusMonths(1).minusDays(1);
+
+        List<Transaction> existingTransactions = transactionRepository.findByUserIdAndCategoryIdAndDateBetween(
+                userId, dto.getCategoryId(), startOfMonth, endOfMonth);
+
+        // Calculate total spent from existing transactions
+        BigDecimal spentAmount = existingTransactions.stream()
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         Budget budget = new Budget();
         budget.setUserId(userId);
         budget.setCategoryId(dto.getCategoryId());
         budget.setAllocatedAmount(dto.getAllocatedAmount());
+        budget.setSpentAmount(spentAmount);
         budget.setYear(dto.getYear());
         budget.setMonth(dto.getMonth());
+        if (dto.getAlertThreshold() != null) {
+            budget.setAlertThreshold(dto.getAlertThreshold());
+        }
 
         Budget saved = budgetRepository.save(budget);
         return mapToDto(saved);
@@ -59,6 +78,9 @@ public class BudgetService {
                 .orElseThrow(() -> new ResourceNotFoundException("Budget", "id", budgetId));
 
         budget.setAllocatedAmount(dto.getAllocatedAmount());
+        if (dto.getAlertThreshold() != null) {
+            budget.setAlertThreshold(dto.getAlertThreshold());
+        }
 
         Budget saved = budgetRepository.save(budget);
         return mapToDto(saved);
@@ -119,6 +141,7 @@ public class BudgetService {
         dto.setRemainingAmount(budget.getRemainingAmount());
         dto.setYear(budget.getYear());
         dto.setMonth(budget.getMonth());
+        dto.setAlertThreshold(budget.getAlertThreshold());
         dto.setSpentPercentage(budget.getSpentPercentage());
         return dto;
     }

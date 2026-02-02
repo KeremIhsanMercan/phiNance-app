@@ -21,8 +21,16 @@ const categoryTypes = [
 ];
 
 const colors = [
-  '#f59e0b', '#d97706', '#3b82f6', '#8b5cf6', '#ec4899',
-  '#06b6d4', '#ef4444', '#84cc16', '#6366f1', '#14b8a6',
+  '#f59e0b',
+  '#C57F08',
+  '#c5b23a',
+  '#8ed334',
+  '#6ee772',
+  '#60f0fa',
+  '#3B82F6',
+  '#A78BFA',
+  '#F472B6',
+  '#EF4444',
 ];
 
 const icons = [

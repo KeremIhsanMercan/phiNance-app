@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
-import { goalsApi } from '../services/api';
+import { goalsApi, accountsApi } from '../services/api';
+import { useCurrencyFormatter } from '../utils/currency';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -22,15 +23,30 @@ const priorities = [
   { value: 'HIGH', label: 'High', color: 'bg-red-100 text-red-700' },
 ];
 
+const colors = [
+  '#f59e0b',
+  '#C57F08',
+  '#c5b23a',
+  '#8ed334',
+  '#6ee772',
+  '#60f0fa',
+  '#3B82F6',
+  '#A78BFA',
+  '#F472B6',
+  '#EF4444',
+];
+
 export default function Goals() {
   const [goals, setGoals] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isContributionModalOpen, setIsContributionModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
-  const [contributingGoalId, setContributingGoalId] = useState(null);
+  const [contributingGoal, setContributingGoal] = useState(null);
   const [deletingGoalId, setDeletingGoalId] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(colors[0]);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
   const {
@@ -41,6 +57,7 @@ export default function Goals() {
 
   useEffect(() => {
     fetchGoals();
+    fetchAccounts();
   }, []);
 
   const fetchGoals = async () => {
@@ -54,26 +71,39 @@ export default function Goals() {
     }
   };
 
+  const fetchAccounts = async () => {
+    try {
+      const response = await accountsApi.getAll();
+      setAccounts(response.data);
+    } catch (error) {
+      console.error('Failed to fetch accounts:', error);
+    }
+  };
+
   const openCreateModal = () => {
     setEditingGoal(null);
+    setSelectedColor(colors[0]);
     reset({
       name: '',
       targetAmount: '',
       deadline: '',
       priority: 'MEDIUM',
       description: '',
+      color: colors[0],
     });
     setIsModalOpen(true);
   };
 
   const openEditModal = (goal) => {
     setEditingGoal(goal);
+    setSelectedColor(goal.color || colors[0]);
     reset({
       name: goal.name,
       targetAmount: goal.targetAmount,
       deadline: goal.deadline,
       priority: goal.priority,
       description: goal.description || '',
+      color: goal.color || colors[0],
     });
     setIsModalOpen(true);
   };
@@ -84,15 +114,18 @@ export default function Goals() {
     reset();
   };
 
-  const openContributionModal = (goalId) => {
-    setContributingGoalId(goalId);
-    resetContribution({ amount: '' });
+  const openContributionModal = (goal) => {
+    setContributingGoal(goal);
+    resetContribution({ 
+      amount: '',
+      accountId: accounts[0]?.id || ''
+    });
     setIsContributionModalOpen(true);
   };
 
   const closeContributionModal = () => {
     setIsContributionModalOpen(false);
-    setContributingGoalId(null);
+    setContributingGoal(null);
     resetContribution();
   };
 
@@ -101,6 +134,7 @@ export default function Goals() {
       const payload = {
         ...data,
         targetAmount: parseFloat(data.targetAmount),
+        color: selectedColor,
       };
 
       if (editingGoal) {
@@ -119,7 +153,11 @@ export default function Goals() {
 
   const onContribute = async (data) => {
     try {
-      await goalsApi.addContribution(contributingGoalId, parseFloat(data.amount));
+      await goalsApi.addContribution(contributingGoal.id, {
+        amount: parseFloat(data.amount),
+        accountId: data.accountId,
+        goalId: contributingGoal.id,
+      });
       toast.success('Contribution added successfully');
       closeContributionModal();
       fetchGoals();
@@ -140,12 +178,7 @@ export default function Goals() {
     }
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount || 0);
-  };
+  const formatCurrency = useCurrencyFormatter();
 
   const getPriorityStyle = (priority) => {
     return priorities.find((p) => p.value === priority) || priorities[1];
@@ -197,7 +230,7 @@ export default function Goals() {
                   const priorityStyle = getPriorityStyle(goal.priority);
 
                   return (
-                    <div key={goal.id} className="card">
+                    <div key={goal.id} className="card" style={{ borderLeftColor: goal.color, borderLeftWidth: '4px' }}>
                       <div className="flex items-start justify-between mb-4">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
@@ -241,8 +274,9 @@ export default function Goals() {
 
                         <div className="w-full bg-gray-200 rounded-full h-3">
                           <div
-                            className="h-3 rounded-full bg-primary-500 transition-all"
-                            style={{ width: `${Math.min(progress, 100)}%` }}
+                            className="h-3 rounded-full transition-all"
+                            style={{ width: `${Math.min(progress, 100)}%`, 
+                              backgroundColor: goal.color}}
                           />
                         </div>
 
@@ -254,7 +288,7 @@ export default function Goals() {
                         </div>
 
                         <button
-                          onClick={() => openContributionModal(goal.id)}
+                          onClick={() => openContributionModal(goal)}
                           className="btn-secondary w-full flex items-center justify-center gap-2"
                         >
                           <CurrencyDollarIcon className="h-4 w-4" />
@@ -346,6 +380,7 @@ export default function Goals() {
                 type="date"
                 {...register('deadline')}
                 className="input-field"
+                required={true}
               />
             </div>
           </div>
@@ -361,6 +396,25 @@ export default function Goals() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Color
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {colors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setSelectedColor(color)}
+                  className={`w-8 h-8 rounded-full border-2 transition-all ${
+                    selectedColor === color ? 'border-gray-900 scale-110' : 'border-gray-300'
+                  }`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
           </div>
 
           <div>
@@ -393,6 +447,23 @@ export default function Goals() {
         title="Add Contribution"
       >
         <form onSubmit={handleContribution(onContribute)} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Account
+            </label>
+            <select
+              {...registerContribution('accountId', { required: 'Account is required' })}
+              className="input-field"
+            >
+              <option value="">Select account</option>
+              {accounts.filter((account) => account.type !== 'SAVINGS').map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Amount

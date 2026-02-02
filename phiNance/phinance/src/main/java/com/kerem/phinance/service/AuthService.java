@@ -65,6 +65,12 @@ public class AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BadRequestException("User not found"));
 
+        // Reactivate user if account was deactivated
+        if (!user.isActive()) {
+            user.setActive(true);
+            userRepository.save(user);
+        }
+
         String accessToken = jwtTokenProvider.generateToken(authentication);
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
 

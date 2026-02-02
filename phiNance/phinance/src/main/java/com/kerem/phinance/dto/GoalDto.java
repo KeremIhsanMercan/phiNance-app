@@ -42,6 +42,8 @@ public class GoalDto {
 
     private boolean completed;
 
+    private String savingsAccountId;
+
     private String color;
 
     private String icon;

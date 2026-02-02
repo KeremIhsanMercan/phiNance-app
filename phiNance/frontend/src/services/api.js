@@ -29,8 +29,11 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    
+    // Don't retry for login/register endpoints
+    const isAuthEndpoint = originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/register');
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
 
       try {
@@ -115,7 +118,7 @@ export const goalsApi = {
   getById: (id) => api.get(`/goals/${id}`),
   validateDependencies: (id) => api.get(`/goals/${id}/validate-dependencies`),
   create: (data) => api.post('/goals', data),
-  addContribution: (id, amount) => api.post('/goals/contribution', { goalId: id, amount }),
+  addContribution: (id, data) => api.post('/goals/contribution', data),
   update: (id, data) => api.put(`/goals/${id}`, data),
   markComplete: (id) => api.put(`/goals/${id}/complete`),
   delete: (id) => api.delete(`/goals/${id}`),

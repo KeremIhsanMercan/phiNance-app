@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
 import { dashboardApi } from '../services/api';
+import { useAuthStore } from '../stores/authStore';
+import { useCurrencyFormatter } from '../utils/currency';
 import LoadingSpinner from '../components/LoadingSpinner';
 import {
   BanknotesIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
   CreditCardIcon,
+  BuildingLibraryIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline';
+import { FaPiggyBank } from 'react-icons/fa';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -34,6 +39,8 @@ ChartJS.register(
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuthStore();
+  const formatCurrency = useCurrencyFormatter();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -57,13 +64,6 @@ export default function Dashboard() {
       </div>
     );
   }
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount || 0);
-  };
 
   const lineChartData = {
     labels: data?.monthlyData?.map((m) => m.month) || [],
@@ -94,6 +94,25 @@ export default function Dashboard() {
         borderWidth: 0,
       },
     ],
+  };
+
+  const accountTypes = {
+    BANK_ACCOUNT: 'Bank Account',
+    CREDIT_CARD: 'Credit Card',
+    CASH: 'Cash',
+    INVESTMENT_ACCOUNT: 'Investment',
+    SAVINGS: 'Savings',
+  };
+
+  const getAccountIcon = (type) => {
+    const iconMap = {
+      BANK_ACCOUNT: BuildingLibraryIcon,
+      CREDIT_CARD: CreditCardIcon,
+      CASH: BanknotesIcon,
+      INVESTMENT_ACCOUNT: ChartBarIcon,
+      SAVINGS: FaPiggyBank,
+    };
+    return iconMap[type] || CreditCardIcon;
   };
 
   return (
@@ -213,25 +232,31 @@ export default function Dashboard() {
         </h3>
         {data?.accountSummaries?.length > 0 ? (
           <div className="space-y-3">
-            {data.accountSummaries.map((account) => (
+            {data.accountSummaries.map((account) => {
+              const Icon = getAccountIcon(account.type);
+              return (
               <div
                 key={account.id}
                 className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
-                    <CreditCardIcon className="h-5 w-5 text-primary-600" />
+                  <div 
+                    className="w-10 h-10 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: `${account.color}20` }}
+                  >
+                    <Icon className="h-5 w-5" style={{ color: account.color }} />
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">{account.name}</p>
-                    <p className="text-sm text-gray-500">{account.type}</p>
+                    <p className="text-sm text-gray-500">{accountTypes[account.type]}</p>
                   </div>
                 </div>
                 <p className="font-semibold text-gray-900">
                   {formatCurrency(account.balance)}
                 </p>
               </div>
-            ))}
+            );
+            })}
           </div>
         ) : (
           <p className="text-gray-500 text-center py-4">

@@ -33,6 +33,8 @@ public class Budget {
 
     private int month;
 
+    private int alertThreshold = 80;
+
     private boolean alertAt80Sent = false;
 
     private boolean alertAt100Sent = false;
@@ -44,7 +46,9 @@ public class Budget {
     private LocalDateTime updatedAt;
 
     public BigDecimal getRemainingAmount() {
-        if (allocatedAmount == null) return BigDecimal.ZERO;
+        if (allocatedAmount == null) {
+            return BigDecimal.ZERO;
+        }
         return allocatedAmount.subtract(spentAmount != null ? spentAmount : BigDecimal.ZERO);
     }
 

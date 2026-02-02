@@ -27,7 +27,23 @@ export default function Login() {
       toast.success('Welcome back!');
       navigate('/dashboard');
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Invalid email or password');
+      // Handle different error scenarios
+      let errorMessage = 'Invalid email or password';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.status === 401) {
+        errorMessage = 'Invalid email or password';
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || 'Invalid request. Please check your inputs.';
+      } else if (!error.response) {
+        errorMessage = 'Connection error. Please try again.';
+      }
+      
+      toast.error(errorMessage, {
+        duration: 4000,
+        position: 'top-center',
+      });
     } finally {
       setLoading(false);
     }
