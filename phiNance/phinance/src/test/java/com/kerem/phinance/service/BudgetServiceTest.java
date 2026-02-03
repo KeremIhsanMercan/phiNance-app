@@ -4,6 +4,7 @@ import com.kerem.phinance.dto.BudgetDto;
 import com.kerem.phinance.model.Budget;
 import com.kerem.phinance.model.User;
 import com.kerem.phinance.repository.BudgetRepository;
+import com.kerem.phinance.repository.TransactionRepository;
 import com.kerem.phinance.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -28,6 +30,9 @@ class BudgetServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private TransactionRepository transactionRepository;
 
     @InjectMocks
     private BudgetService budgetService;
@@ -58,6 +63,9 @@ class BudgetServiceTest {
     void createBudget_Success() {
         when(budgetRepository.findByUserIdAndCategoryIdAndYearAndMonth(
                 userId, "category123", 2024, 1)).thenReturn(Optional.empty());
+        when(transactionRepository.findByUserIdAndCategoryIdAndDateBetween(
+                eq(userId), eq("category123"), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
         when(budgetRepository.save(any(Budget.class))).thenReturn(budget);
 
         BudgetDto result = budgetService.createBudget(userId, budgetDto);
@@ -88,7 +96,7 @@ class BudgetServiceTest {
 
         when(budgetRepository.findByUserIdAndCategoryIdAndYearAndMonth(
                 userId, "category123", 2024, 1)).thenReturn(Optional.of(budget));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(budgetRepository.save(any(Budget.class))).thenReturn(budget);
 
         budgetService.updateSpentAmount(userId, "category123", new BigDecimal("100.00"),

@@ -254,7 +254,7 @@ export default function Accounts() {
               Account Type
             </label>
             <select {...register('type')} className="input-field">
-              {accountTypes.map((type) => (
+              {accountTypes.filter((type) => type.value !== 'SAVINGS').map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>

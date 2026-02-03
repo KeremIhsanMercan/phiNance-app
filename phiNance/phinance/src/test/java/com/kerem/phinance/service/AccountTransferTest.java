@@ -79,18 +79,13 @@ class AccountTransferTest {
         sourceTransaction.setAccountId("source123");
         sourceTransaction.setType(Transaction.TransactionType.TRANSFER);
         sourceTransaction.setAmount(new BigDecimal("200.00"));
-
-        Transaction linkedTransaction = new Transaction();
-        linkedTransaction.setId("trans2");
-        linkedTransaction.setUserId(userId);
-        linkedTransaction.setAccountId("dest123");
-        linkedTransaction.setType(Transaction.TransactionType.INCOME);
-        linkedTransaction.setAmount(new BigDecimal("200.00"));
+        sourceTransaction.setTransferToAccountId("dest123");
+        sourceTransaction.setDate(LocalDate.now());
+        sourceTransaction.setDescription("Transfer to savings");
 
         when(accountService.accountBelongsToUser("source123", userId)).thenReturn(true);
         when(accountService.accountBelongsToUser("dest123", userId)).thenReturn(true);
         when(transactionRepository.save(any(Transaction.class)))
-                .thenReturn(linkedTransaction)
                 .thenReturn(sourceTransaction);
         doNothing().when(accountService).updateBalance(anyString(), any(BigDecimal.class), anyBoolean());
 
@@ -126,9 +121,9 @@ class AccountTransferTest {
         // Test that transfer properly deducts from source
         sourceAccount.setCurrentBalance(new BigDecimal("1000.00"));
         BigDecimal transferAmount = new BigDecimal("200.00");
-        
+
         BigDecimal expectedBalance = sourceAccount.getCurrentBalance().subtract(transferAmount);
-        
+
         assertEquals(new BigDecimal("800.00"), expectedBalance);
     }
 
@@ -137,9 +132,9 @@ class AccountTransferTest {
         // Test that transfer properly adds to destination
         destAccount.setCurrentBalance(new BigDecimal("500.00"));
         BigDecimal transferAmount = new BigDecimal("200.00");
-        
+
         BigDecimal expectedBalance = destAccount.getCurrentBalance().add(transferAmount);
-        
+
         assertEquals(new BigDecimal("700.00"), expectedBalance);
     }
 }

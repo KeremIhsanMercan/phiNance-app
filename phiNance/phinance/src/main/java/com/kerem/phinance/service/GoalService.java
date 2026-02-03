@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -171,9 +172,23 @@ public class GoalService {
         // Update goal current amount
         goal.setCurrentAmount(goal.getCurrentAmount().add(dto.getAmount()));
 
-        // Check if goal is completed
+        // Check if goal reached target and all dependencies are completed
         if (goal.getCurrentAmount().compareTo(goal.getTargetAmount()) >= 0) {
-            goal.setCompleted(true);
+            // Only mark as completed if all dependencies are met
+            boolean canComplete = true;
+            if (goal.getDependencyGoalIds() != null && !goal.getDependencyGoalIds().isEmpty()) {
+                for (String dependencyId : goal.getDependencyGoalIds()) {
+                    Goal dependency = goalRepository.findById(dependencyId).orElse(null);
+                    if (dependency == null || !dependency.isCompleted()) {
+                        canComplete = false;
+                        break;
+                    }
+                }
+            }
+            
+            if (canComplete) {
+                goal.setCompleted(true);
+            }
         }
 
         Goal saved = goalRepository.save(goal);
@@ -216,6 +231,69 @@ public class GoalService {
         }
 
         return true;
+    }
+
+    public GoalDto addDependency(String userId, String goalId, String dependencyGoalId) {
+        Goal goal = goalRepository.findByIdAndUserId(goalId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", goalId));
+
+        Goal dependencyGoal = goalRepository.findByIdAndUserId(dependencyGoalId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", dependencyGoalId));
+
+        // Check if dependency already exists
+        if (goal.getDependencyGoalIds() != null && goal.getDependencyGoalIds().contains(dependencyGoalId)) {
+            throw new BadRequestException("Dependency already exists");
+        }
+
+        // Check for circular dependency
+        if (wouldCreateCircularDependency(goalId, dependencyGoalId)) {
+            throw new BadRequestException("Cannot add dependency: this would create a circular dependency");
+        }
+
+        if (goal.getDependencyGoalIds() == null) {
+            goal.setDependencyGoalIds(new ArrayList<>());
+        }
+        goal.getDependencyGoalIds().add(dependencyGoalId);
+
+        Goal saved = goalRepository.save(goal);
+        return mapToDto(saved);
+    }
+
+    public GoalDto removeDependency(String userId, String goalId, String dependencyGoalId) {
+        Goal goal = goalRepository.findByIdAndUserId(goalId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", goalId));
+
+        if (goal.getDependencyGoalIds() != null) {
+            goal.getDependencyGoalIds().remove(dependencyGoalId);
+        }
+
+        Goal saved = goalRepository.save(goal);
+        return mapToDto(saved);
+    }
+
+    private boolean wouldCreateCircularDependency(String goalId, String dependencyGoalId) {
+        // Check if dependencyGoal depends on goalId (directly or indirectly)
+        return checkDependencyChain(dependencyGoalId, goalId);
+    }
+
+    private boolean checkDependencyChain(String currentGoalId, String targetGoalId) {
+        if (currentGoalId.equals(targetGoalId)) {
+            return true; // Found circular dependency
+        }
+
+        Goal currentGoal = goalRepository.findById(currentGoalId).orElse(null);
+        if (currentGoal == null || currentGoal.getDependencyGoalIds() == null) {
+            return false;
+        }
+
+        // Recursively check all dependencies
+        for (String depId : currentGoal.getDependencyGoalIds()) {
+            if (checkDependencyChain(depId, targetGoalId)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private GoalDto mapToDto(Goal goal) {

@@ -142,7 +142,7 @@ You are expected to develop a comprehensive personal finance tracking applicatio
   - Technology stack
   - Installation instructions
   - How to run the application
-  - API documentation or Swagger/OpenAPI integration
+  - API documentation
   - Database schema diagram
   - Screenshots (optional but recommended)
 

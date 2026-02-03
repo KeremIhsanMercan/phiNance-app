@@ -128,7 +128,7 @@ public class DashboardService {
 
                     return DashboardDto.CategoryExpense.builder()
                             .categoryId(entry.getKey())
-                            .categoryName(category != null ? category.getName() : "Unknown")
+                            .categoryName(category != null ? category.getName() : "Category Deleted")
                             .color(category != null ? category.getColor() : "#808080")
                             .amount(entry.getValue())
                             .percentage(percentage)

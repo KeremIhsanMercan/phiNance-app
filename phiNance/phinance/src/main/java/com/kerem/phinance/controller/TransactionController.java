@@ -35,6 +35,14 @@ public class TransactionController {
         return ResponseEntity.ok(transactionService.getTransactions(userPrincipal.getId(), filter));
     }
 
+    @GetMapping("/export")
+    @Operation(summary = "Get all transactions matching filters for export (no pagination)")
+    public ResponseEntity<List<TransactionDto>> getTransactionsForExport(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @ModelAttribute TransactionFilterDto filter) {
+        return ResponseEntity.ok(transactionService.getTransactionsForExport(userPrincipal.getId(), filter));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Get transaction by ID")
     public ResponseEntity<TransactionDto> getTransactionById(

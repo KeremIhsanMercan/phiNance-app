@@ -5,6 +5,7 @@ import com.kerem.phinance.dto.auth.RegisterRequest;
 import com.kerem.phinance.dto.auth.AuthResponse;
 import com.kerem.phinance.exception.BadRequestException;
 import com.kerem.phinance.model.User;
+import com.kerem.phinance.repository.CategoryRepository;
 import com.kerem.phinance.repository.UserRepository;
 import com.kerem.phinance.security.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,9 @@ class AuthServiceTest {
 
     @Mock
     private AuthenticationManager authenticationManager;
+
+    @Mock
+    private CategoryRepository categoryRepository;
 
     @InjectMocks
     private AuthService authService;

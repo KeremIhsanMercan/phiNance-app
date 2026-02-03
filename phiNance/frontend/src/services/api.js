@@ -81,6 +81,7 @@ export const accountsApi = {
 // Transactions API
 export const transactionsApi = {
   getAll: (params) => api.get('/transactions', { params }),
+  getAllForExport: (params) => api.get('/transactions/export', { params }),
   getById: (id) => api.get(`/transactions/${id}`),
   getByDateRange: (startDate, endDate) =>
     api.get('/transactions/date-range', { params: { startDate, endDate } }),
@@ -121,12 +122,30 @@ export const goalsApi = {
   addContribution: (id, data) => api.post('/goals/contribution', data),
   update: (id, data) => api.put(`/goals/${id}`, data),
   markComplete: (id) => api.put(`/goals/${id}/complete`),
+  addDependency: (id, dependencyId) => api.post(`/goals/${id}/dependencies/${dependencyId}`),
+  removeDependency: (id, dependencyId) => api.delete(`/goals/${id}/dependencies/${dependencyId}`),
   delete: (id) => api.delete(`/goals/${id}`),
 };
 
 // Dashboard API
 export const dashboardApi = {
   getData: () => api.get('/dashboard'),
+};
+
+// Files API
+export const filesApi = {
+  upload: (files) => {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+    return api.post('/files/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  delete: (userId, filename) => api.delete(`/files/${userId}/${filename}`),
 };
 
 export default api;

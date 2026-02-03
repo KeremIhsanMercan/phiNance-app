@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { useTransactionsStore } from '../stores/transactionsStore';
 import { useAccountsStore } from '../stores/accountsStore';
-import { categoriesApi } from '../services/api';
+import { categoriesApi, filesApi, transactionsApi } from '../services/api';
 import { useCurrencyFormatter } from '../utils/currency';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -18,6 +18,12 @@ import {
   ArrowUpIcon,
   ArrowDownIcon,
   FunnelIcon,
+  PaperClipIcon,
+  XMarkIcon,
+  ArrowDownTrayIcon,
+  MagnifyingGlassIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline';
 
 const transactionTypes = [
@@ -42,15 +48,39 @@ export default function Transactions() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [deletingTransactionId, setDeletingTransactionId] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    search: '',
+    type: '',
+    accountId: '',
+    categoryId: '',
+    dateFrom: '',
+    dateTo: '',
+    amountMin: '',
+    amountMax: '',
+  });
+  const [sortBy, setSortBy] = useState('date');
+  const [sortOrder, setSortOrder] = useState('desc');
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm();
   const watchType = watch('type', 'EXPENSE');
+  const watchRecurring = watch('recurring', false);
 
   useEffect(() => {
-    fetchTransactions();
     fetchAccounts();
     fetchCategories();
   }, []);
+
+  // Fetch transactions when filters or sorting changes (with debounce for text inputs)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchTransactions(buildQueryParams());
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [filters, sortBy, sortOrder]);
 
   const fetchCategories = async () => {
     try {
@@ -61,8 +91,30 @@ export default function Transactions() {
     }
   };
 
+  const buildQueryParams = (page = 0) => {
+    const params = {
+      searchQuery: filters.search || undefined,
+      type: filters.type || undefined,
+      accountId: filters.accountId || undefined,
+      categoryId: filters.categoryId || undefined,
+      startDate: filters.dateFrom || undefined,
+      endDate: filters.dateTo || undefined,
+      minAmount: filters.amountMin ? parseFloat(filters.amountMin) : undefined,
+      maxAmount: filters.amountMax ? parseFloat(filters.amountMax) : undefined,
+      sortBy: sortBy,
+      sortDirection: sortOrder,
+      page: page,
+      size: 20,
+    };
+    
+    // Remove undefined values
+    Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+    return params;
+  };
+
   const openCreateModal = () => {
     setEditingTransaction(null);
+    setUploadedFiles([]);
     reset({
       type: 'EXPENSE',
       amount: '',
@@ -77,6 +129,7 @@ export default function Transactions() {
 
   const openEditModal = (transaction) => {
     setEditingTransaction(transaction);
+    setUploadedFiles(transaction.attachmentUrls || []);
     reset({
       type: transaction.type,
       amount: transaction.amount,
@@ -94,7 +147,69 @@ export default function Transactions() {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingTransaction(null);
+    setUploadedFiles([]);
     reset();
+  };
+
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    // Client-side validation
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    const MAX_ATTACHMENTS = 5;
+    
+    // Check attachment limit
+    if (uploadedFiles.length + files.length > MAX_ATTACHMENTS) {
+      toast.error(`Maximum ${MAX_ATTACHMENTS} attachments allowed. You currently have ${uploadedFiles.length} attachment(s).`);
+      e.target.value = ''; // Reset file input
+      return;
+    }
+    
+    const oversizedFiles = files.filter(file => file.size > MAX_FILE_SIZE);
+    
+    if (oversizedFiles.length > 0) {
+      const fileNames = oversizedFiles.map(f => f.name).join(', ');
+      toast.error(`File(s) too large: ${fileNames}. Maximum size is 5MB per file.`);
+      e.target.value = ''; // Reset file input
+      return;
+    }
+
+    setUploadingFiles(true);
+    try {
+      const response = await filesApi.upload(files);
+      setUploadedFiles([...uploadedFiles, ...response.data]);
+      toast.success('Files uploaded successfully');
+      e.target.value = ''; // Reset file input after success
+    } catch (error) {
+      console.log('file upload error', error);
+      toast.error(error.response?.data?.message || 'Failed to upload files');
+      e.target.value = ''; // Reset file input
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
+  const removeFile = async (fileUrl) => {
+    try {
+      // Extract userId and filename from URL
+      // URL format: /api/files/{userId}/{filename}?token=xxx
+      const urlMatch = fileUrl.match(/\/api\/files\/([^\/]+)\/([^?]+)/);
+      if (urlMatch) {
+        const userId = urlMatch[1];
+        const filename = decodeURIComponent(urlMatch[2]);
+        
+        await filesApi.delete(userId, filename);
+        setUploadedFiles(uploadedFiles.filter(url => url !== fileUrl));
+        toast.success('File deleted successfully');
+      } else {
+        // If URL doesn't match expected format, just remove from state
+        setUploadedFiles(uploadedFiles.filter(url => url !== fileUrl));
+      }
+    } catch (error) {
+      console.error('File deletion error:', error);
+      toast.error('Failed to delete file');
+    }
   };
 
   const onSubmit = async (data) => {
@@ -103,8 +218,9 @@ export default function Transactions() {
         ...data,
         amount: parseFloat(data.amount),
         categoryId: data.categoryId || null,
-        transferToAccountId: data.type === 'TRANSFER' ? data.transferToAccountId : null,
+        transferToAccountId: data.type === 'TRANSFER' ? (data.transferToAccountId || editingTransaction?.transferToAccountId) : null,
         recurrencePattern: data.recurring ? data.recurrencePattern : null,
+        attachmentUrls: uploadedFiles,
       };
 
       if (editingTransaction) {
@@ -115,7 +231,7 @@ export default function Transactions() {
         toast.success('Transaction created successfully');
       }
       closeModal();
-      fetchTransactions();
+      fetchTransactions(buildQueryParams());
     } catch (error) {
       toast.error(error.response?.data?.message || 'Operation failed');
     }
@@ -129,6 +245,78 @@ export default function Transactions() {
       setDeletingTransactionId(null);
     } catch (error) {
       toast.error('Failed to delete transaction');
+    }
+  };
+
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      search: '',
+      type: '',
+      accountId: '',
+      categoryId: '',
+      dateFrom: '',
+      dateTo: '',
+      amountMin: '',
+      amountMax: '',
+    });
+  };
+
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const exportToCSV = async () => {
+    try {
+      // Fetch all transactions matching current filters (no pagination)
+      const params = buildQueryParams(0);
+      delete params.page; // Remove pagination params for export
+      delete params.size;
+      
+      const response = await transactionsApi.getAllForExport(params);
+      const allTransactions = response.data;
+      
+      if (allTransactions.length === 0) {
+        toast.error('No transactions to export');
+        return;
+      }
+
+      const headers = ['Date', 'Type', 'Account', 'Category', 'Description', 'Amount'];
+      const csvData = allTransactions.map(t => [
+        format(new Date(t.date), 'yyyy-MM-dd'),
+        t.type,
+        getAccountName(t.accountId),
+        getCategoryName(t.categoryId, t),
+        t.description || '',
+        t.amount
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `transactions_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success(`Exported ${allTransactions.length} transactions successfully`);
+    } catch (error) {
+      toast.error('Failed to export transactions');
+      console.error('Export error:', error);
     }
   };
 
@@ -163,11 +351,160 @@ export default function Transactions() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
-        <button onClick={openCreateModal} className="btn-primary flex items-center gap-2">
-          <PlusIcon className="h-5 w-5" />
-          Add Transaction
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setShowFilters(!showFilters)} 
+            className="btn-secondary flex items-center gap-2"
+          >
+            <FunnelIcon className="h-5 w-5" />
+            Filters
+          </button>
+          <button 
+            onClick={exportToCSV} 
+            className="btn-secondary flex items-center gap-2"
+            disabled={transactions.length === 0}
+          >
+            <ArrowDownTrayIcon className="h-5 w-5" />
+            Export CSV
+          </button>
+          <button onClick={openCreateModal} className="btn-primary flex items-center gap-2">
+            <PlusIcon className="h-5 w-5" />
+            Add Transaction
+          </button>
+        </div>
       </div>
+
+      {/* Filters Panel */}
+      {showFilters && (
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900">Filters</h3>
+            <button onClick={clearFilters} className="text-sm text-primary-600 hover:text-primary-700">
+              Clear All
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Search */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  className="input-field pr-10"
+                  placeholder="Search description..."
+                />
+                <MagnifyingGlassIcon className="h-5 w-5 absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              </div>
+            </div>
+
+            {/* Type Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+              <select
+                value={filters.type}
+                onChange={(e) => handleFilterChange('type', e.target.value)}
+                className="input-field"
+              >
+                <option value="">All Types</option>
+                {transactionTypes.map(type => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Account Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Account</label>
+              <select
+                value={filters.accountId}
+                onChange={(e) => handleFilterChange('accountId', e.target.value)}
+                className="input-field"
+              >
+                <option value="">All Accounts</option>
+                {accounts.filter(account => account.type !== 'SAVINGS').map(account => ( // other than saving accounts
+                  <option key={account.id} value={account.id}>{account.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Category Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <select
+                value={filters.categoryId}
+                onChange={(e) => handleFilterChange('categoryId', e.target.value)}
+                className="input-field"
+              >
+                <option value="">All Categories</option>
+                {categories.map(category => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Date From */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date From</label>
+              <input
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+                className="input-field"
+              />
+            </div>
+
+            {/* Date To */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date To</label>
+              <input
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+                className="input-field"
+              />
+            </div>
+
+            {/* Amount Min */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount Min</label>
+              <input
+                type="number"
+                step="0.01"
+                value={filters.amountMin}
+                onChange={(e) => handleFilterChange('amountMin', e.target.value)}
+                className="input-field"
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* Amount Max */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount Max</label>
+              <input
+                type="number"
+                step="0.01"
+                value={filters.amountMax}
+                onChange={(e) => handleFilterChange('amountMax', e.target.value)}
+                className="input-field"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          {/* Active Filters Summary */}
+          {(filters.search || filters.type || filters.accountId || filters.categoryId || 
+            filters.dateFrom || filters.dateTo || filters.amountMin || filters.amountMax) && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-600">
+                Showing {transactions.length} of {pagination.totalElements} transactions
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {transactions.length === 0 ? (
         <EmptyState
@@ -186,12 +523,61 @@ export default function Transactions() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Date</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Type</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Account</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Category</th>
+                  <th 
+                    className="text-left py-3 px-4 text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
+                    onClick={() => handleSort('date')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Date
+                      {sortBy === 'date' && (
+                        sortOrder === 'asc' ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />
+                      )}
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
+                    onClick={() => handleSort('type')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Type
+                      {sortBy === 'type' && (
+                        sortOrder === 'asc' ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="text-left py-3 px-4 text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
+                    onClick={() => handleSort('account')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Account
+                      {sortBy === 'account' && (
+                        sortOrder === 'asc' ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="text-left py-3 px-4 text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
+                    onClick={() => handleSort('category')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Category
+                      {sortBy === 'category' && (
+                        sortOrder === 'asc' ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />
+                      )}
+                    </div>
+                  </th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Description</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">Amount</th>
+                  <th 
+                    className="text-right py-3 px-4 text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
+                    onClick={() => handleSort('amount')}
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      Amount
+                      {sortBy === 'amount' && (
+                        sortOrder === 'asc' ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />
+                      )}
+                    </div>
+                  </th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
                 </tr>
               </thead>
@@ -217,7 +603,16 @@ export default function Transactions() {
                       <td className="py-3 px-4 text-sm text-gray-600">
                         {getCategoryName(transaction.categoryId, transaction)}
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate">{transaction.description || '-'}
+                      <td className="py-3 px-4 text-sm text-gray-600 max-w-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate">{transaction.description || '-'}</span>
+                          {transaction.attachmentUrls && transaction.attachmentUrls.length > 0 && (
+                            <span className="flex items-center gap-1 text-primary-600 flex-shrink-0">
+                              <PaperClipIcon className="h-4 w-4" />
+                              <span className="text-xs">{transaction.attachmentUrls.length}</span>
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className={`py-3 px-4 text-sm font-medium text-right ${style.color}`}>
                         {transaction.type === 'EXPENSE' ? '-' : ''}
@@ -259,14 +654,14 @@ export default function Transactions() {
               </p>
               <div className="flex gap-2">
                 <button
-                  onClick={() => fetchTransactions(pagination.page - 1)}
+                  onClick={() => fetchTransactions(buildQueryParams(pagination.page - 1))}
                   disabled={pagination.page === 0}
                   className="btn-secondary disabled:opacity-50"
                 >
                   Previous
                 </button>
                 <button
-                  onClick={() => fetchTransactions(pagination.page + 1)}
+                  onClick={() => fetchTransactions(buildQueryParams(pagination.page + 1))}
                   disabled={pagination.page >= pagination.totalPages - 1}
                   className="btn-secondary disabled:opacity-50"
                 >
@@ -305,6 +700,15 @@ export default function Transactions() {
                     type: value,
                   });
                 }
+                // if changed to INCOME or EXPENSE, set categories to their respective types
+                if (value === 'INCOME' || value === 'EXPENSE') {
+                  reset({
+                    ...watch(),
+                    type: value,
+                    categoryId: '',
+                  });
+                }
+
               }
             } className="input-field">
               {transactionTypes.map((type) => (
@@ -368,11 +772,20 @@ export default function Transactions() {
                 className="input-field"
               >
                 <option value="">Select destination</option>
-                {accounts.filter((account) => account.type !== 'SAVINGS').map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
+                {accounts
+                  .filter((account) => {
+                    // For editing: include SAVINGS accounts if this transaction originally had a SAVINGS destination
+                    if (editingTransaction && editingTransaction.transferToAccountId) {
+                      return account.type !== 'SAVINGS' || account.id === editingTransaction.transferToAccountId;
+                    }
+                    // For creating: exclude all SAVINGS accounts
+                    return account.type !== 'SAVINGS';
+                  })
+                  .map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
               </select>
             </div>
           )}
@@ -397,12 +810,14 @@ export default function Transactions() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description (Optional)
+              Description {watchRecurring ? '(Required for recurring transactions)' : '(Optional)'}
             </label>
             <input
               {...register('description')}
               className="input-field"
               placeholder="Transaction description"
+              // required if recurring is true
+              {...(watchRecurring ? { required: 'Description is required for recurring transactions' } : {})}
             />
           </div>
 
@@ -412,11 +827,60 @@ export default function Transactions() {
               id="recurring"
               {...register('recurring')}
               className="h-4 w-4 text-primary-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={editingTransaction !== null || watchType === 'TRANSFER'}
+              disabled={watchType === 'TRANSFER'}
             />
-            <label htmlFor="recurring" className={`text-sm ${editingTransaction ? 'text-gray-400' : 'text-gray-700'}`}>
+            <label htmlFor="recurring" className={`text-sm ${watchType === 'TRANSFER' ? 'text-gray-400' : 'text-gray-700'}`}>
               Recurring transaction
             </label>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Attachments (Optional) - Max 5 files
+            </label>
+            <div className="space-y-2">
+              <label className={`flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg transition-colors ${uploadedFiles.length >= 5 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-primary-500 hover:bg-gray-50'}`}>
+                <PaperClipIcon className="h-5 w-5 text-gray-400 mr-2" />
+                <span className="text-sm text-gray-600">
+                  {uploadingFiles ? 'Uploading...' : `Upload receipts (${uploadedFiles.length}/5) - JPG, PNG, PDF`}
+                </span>
+                <input
+                  type="file"
+                  multiple
+                  accept=".jpg,.jpeg,.png,.pdf,.gif"
+                  onChange={handleFileUpload}
+                  disabled={uploadingFiles || uploadedFiles.length >= 5}
+                  className="hidden"
+                />
+              </label>
+              
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-2">
+                  {uploadedFiles.map((fileUrl, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <PaperClipIcon className="h-4 w-4 text-gray-400" />
+                        <a
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary-600 hover:text-primary-700"
+                        >
+                          Attachment {index + 1}
+                        </a>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(fileUrl)}
+                        className="p-1 text-gray-400 hover:text-red-600 rounded"
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-3 pt-4">

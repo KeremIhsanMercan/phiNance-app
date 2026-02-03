@@ -297,6 +297,7 @@ export default function Budgets() {
               type="month"
               {...register('monthYear', { required: 'Month is required' })}
               className="input-field"
+              placeholder="YYYY-MM"
             />
             {errors.monthYear && (
               <p className="mt-1 text-sm text-red-600">{errors.monthYear.message}</p>

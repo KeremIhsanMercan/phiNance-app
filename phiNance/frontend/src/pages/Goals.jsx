@@ -15,6 +15,9 @@ import {
   TrashIcon,
   CheckCircleIcon,
   CurrencyDollarIcon,
+  LinkIcon,
+  XMarkIcon,
+  CheckIcon,
 } from '@heroicons/react/24/outline';
 
 const priorities = [
@@ -47,6 +50,7 @@ export default function Goals() {
   const [contributingGoal, setContributingGoal] = useState(null);
   const [deletingGoalId, setDeletingGoalId] = useState(null);
   const [selectedColor, setSelectedColor] = useState(colors[0]);
+  const [showDependencyDropdown, setShowDependencyDropdown] = useState({});
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
   const {
@@ -174,8 +178,56 @@ export default function Goals() {
       setDeletingGoalId(null);
       fetchGoals();
     } catch (error) {
-      toast.error('Failed to delete goal');
+      toast.error(error.response?.data?.message || 'Failed to delete goal');
     }
+  };
+
+  const handleAddDependency = async (goalId, dependencyId) => {
+    try {
+      await goalsApi.addDependency(goalId, dependencyId);
+      toast.success('Dependency added successfully');
+      setShowDependencyDropdown({ ...showDependencyDropdown, [goalId]: false });
+      fetchGoals();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to add dependency');
+    }
+  };
+
+  const handleRemoveDependency = async (goalId, dependencyId) => {
+    try {
+      await goalsApi.removeDependency(goalId, dependencyId);
+      toast.success('Dependency removed successfully');
+      fetchGoals();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to remove dependency');
+    }
+  };
+
+  const handleMarkComplete = async (goalId) => {
+    try {
+      await goalsApi.markComplete(goalId);
+      toast.success('Goal marked as completed!');
+      fetchGoals();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to complete goal');
+    }
+  };
+
+  const getGoalName = (goalId) => {
+    const goal = goals.find(g => g.id === goalId);
+    return goal ? goal.name : 'Unknown Goal';
+  };
+
+  const getAvailableDependencies = (currentGoalId) => {
+    // Exclude current goal, completed goals, and already added dependencies
+    const currentGoal = goals.find(g => g.id === currentGoalId);
+    const existingDeps = currentGoal?.dependencyGoalIds || [];
+    
+    return goals.filter(g => 
+      g.id !== currentGoalId && 
+      !g.completed && 
+      !existingDeps.includes(g.id)
+    );
   };
 
   const formatCurrency = useCurrencyFormatter();
@@ -230,7 +282,7 @@ export default function Goals() {
                   const priorityStyle = getPriorityStyle(goal.priority);
 
                   return (
-                    <div key={goal.id} className="card" style={{ borderLeftColor: goal.color, borderLeftWidth: '4px' }}>
+                    <div key={goal.id} className="card flex flex-col" style={{ borderLeftColor: goal.color, borderLeftWidth: '4px' }}>
                       <div className="flex items-start justify-between mb-4">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
@@ -266,10 +318,39 @@ export default function Goals() {
                         </div>
                       </div>
 
+                      {/* Dependencies Section */}
+                      {goal.dependencyGoalIds && goal.dependencyGoalIds.length > 0 && (
+                        <div className="pb-3 mb-3 border-b border-gray-200">
+                          <p className="text-xs font-medium text-gray-500 mb-2">Depends on:</p>
+                          <div className="space-y-1">
+                            {goal.dependencyGoalIds.map(depId => {
+                              const depGoal = goals.find(g => g.id === depId);
+                              return (
+                                <div key={depId} className="flex items-center justify-between text-xs bg-gray-50 rounded px-2 py-1">
+                                  <div className="flex items-center gap-1">
+                                    <LinkIcon className="h-3 w-3 text-gray-400" />
+                                    <span className={depGoal?.completed ? 'text-green-600' : 'text-gray-700'}>
+                                      {getGoalName(depId)}
+                                      {depGoal?.completed && <CheckIcon className="inline h-3 w-3 ml-1 mb-0.5" />}
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={() => handleRemoveDependency(goal.id, depId)}
+                                    className="text-gray-400 hover:text-red-600"
+                                  >
+                                    <XMarkIcon className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="space-y-3">
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-500">Progress</span>
-                          <span className="text-gray-900">{progress.toFixed(0)}%</span>
+                          <span className="text-gray-900">{progress.toFixed(2)}%</span>
                         </div>
 
                         <div className="w-full bg-gray-200 rounded-full h-3">
@@ -286,6 +367,55 @@ export default function Goals() {
                             {formatCurrency(goal.targetAmount)}
                           </span>
                         </div>
+                      </div>
+
+                      {/* Description Section - grows to fill space */}
+                      <div className="flex-grow my-4">
+                        {goal.description && (
+                          <p className="text-sm text-gray-600 italic">
+                            {goal.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Buttons Section - at the bottom */}
+                      <div className="space-y-2 mt-auto">
+                        {/* Add Dependency Dropdown */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowDependencyDropdown({
+                              ...showDependencyDropdown,
+                              [goal.id]: !showDependencyDropdown[goal.id]
+                            })}
+                            className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"
+                          >
+                            <LinkIcon className="h-4 w-4" />
+                            Add Dependency
+                          </button>
+                          
+                          {showDependencyDropdown[goal.id] && (
+                            <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                              {getAvailableDependencies(goal.id).length === 0 ? (
+                                <div className="p-3 text-sm text-gray-500 text-center">
+                                  No available goals
+                                </div>
+                              ) : (
+                                getAvailableDependencies(goal.id).map(availableGoal => (
+                                  <button
+                                    key={availableGoal.id}
+                                    onClick={() => handleAddDependency(goal.id, availableGoal.id)}
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                                  >
+                                    <div className="font-medium text-gray-900">{availableGoal.name}</div>
+                                    <div className="text-xs text-gray-500">
+                                      {availableGoal.progressPercentage?.toFixed(0) || 0}% complete
+                                    </div>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
 
                         <button
                           onClick={() => openContributionModal(goal)}
@@ -294,6 +424,16 @@ export default function Goals() {
                           <CurrencyDollarIcon className="h-4 w-4" />
                           Add Contribution
                         </button>
+
+                        {progress >= 100 && (
+                          <button
+                            onClick={() => handleMarkComplete(goal.id)}
+                            className="btn-primary w-full flex items-center justify-center gap-2"
+                          >
+                            <CheckCircleIcon className="h-4 w-4" />
+                            Mark Complete
+                          </button>
+                        )}
                       </div>
                     </div>
                   );

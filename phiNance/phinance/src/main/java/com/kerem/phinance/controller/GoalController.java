@@ -89,6 +89,24 @@ public class GoalController {
         return ResponseEntity.ok(goalService.markAsCompleted(userPrincipal.getId(), id));
     }
 
+    @PostMapping("/{id}/dependencies/{dependencyId}")
+    @Operation(summary = "Add dependency to a goal")
+    public ResponseEntity<GoalDto> addDependency(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable String id,
+            @PathVariable String dependencyId) {
+        return ResponseEntity.ok(goalService.addDependency(userPrincipal.getId(), id, dependencyId));
+    }
+
+    @DeleteMapping("/{id}/dependencies/{dependencyId}")
+    @Operation(summary = "Remove dependency from a goal")
+    public ResponseEntity<GoalDto> removeDependency(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable String id,
+            @PathVariable String dependencyId) {
+        return ResponseEntity.ok(goalService.removeDependency(userPrincipal.getId(), id, dependencyId));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete a goal")
     public ResponseEntity<Map<String, String>> deleteGoal(

@@ -2,6 +2,7 @@ package com.kerem.phinance.service;
 
 import com.kerem.phinance.dto.GoalContributionDto;
 import com.kerem.phinance.dto.GoalDto;
+import com.kerem.phinance.dto.TransactionDto;
 import com.kerem.phinance.exception.BadRequestException;
 import com.kerem.phinance.model.Goal;
 import com.kerem.phinance.model.GoalContribution;
@@ -33,6 +34,12 @@ class GoalServiceTest {
 
     @Mock
     private GoalContributionRepository contributionRepository;
+
+    @Mock
+    private AccountService accountService;
+
+    @Mock
+    private TransactionService transactionService;
 
     @InjectMocks
     private GoalService goalService;
@@ -79,7 +86,7 @@ class GoalServiceTest {
     @Test
     void validateGoalDependencies_DependencyNotCompleted_ReturnsFalse() {
         goal.setDependencyGoalIds(Arrays.asList("dependency123"));
-        
+
         when(goalRepository.findByIdAndUserId("goal123", userId)).thenReturn(Optional.of(goal));
         when(goalRepository.findById("dependency123")).thenReturn(Optional.of(dependencyGoal));
 
@@ -144,15 +151,21 @@ class GoalServiceTest {
     @Test
     void addContribution_CompletesGoalWhenTargetReached() {
         goal.setCurrentAmount(new BigDecimal("4500.00"));
-        
+        goal.setSavingsAccountId("savings123");
+
         GoalContributionDto contributionDto = new GoalContributionDto();
         contributionDto.setGoalId("goal123");
+        contributionDto.setAccountId("account123");
         contributionDto.setAmount(new BigDecimal("500.00"));
+
+        TransactionDto transactionDto = new TransactionDto();
+        transactionDto.setId("trans123");
 
         when(goalRepository.findByIdAndUserId("goal123", userId)).thenReturn(Optional.of(goal));
         when(contributionRepository.save(any(GoalContribution.class)))
                 .thenReturn(new GoalContribution());
         when(goalRepository.save(any(Goal.class))).thenReturn(goal);
+        when(transactionService.createTransaction(eq(userId), any())).thenReturn(transactionDto);
 
         GoalDto result = goalService.addContribution(userId, contributionDto);
 

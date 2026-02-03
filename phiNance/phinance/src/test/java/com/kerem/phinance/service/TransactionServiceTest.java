@@ -5,6 +5,8 @@ import com.kerem.phinance.dto.TransactionFilterDto;
 import com.kerem.phinance.exception.BadRequestException;
 import com.kerem.phinance.exception.ResourceNotFoundException;
 import com.kerem.phinance.model.Transaction;
+import com.kerem.phinance.repository.GoalContributionRepository;
+import com.kerem.phinance.repository.GoalRepository;
 import com.kerem.phinance.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +35,12 @@ class TransactionServiceTest {
 
     @Mock
     private BudgetService budgetService;
+
+    @Mock
+    private GoalContributionRepository goalContributionRepository;
+
+    @Mock
+    private GoalRepository goalRepository;
 
     @InjectMocks
     private TransactionService transactionService;
@@ -82,7 +90,7 @@ class TransactionServiceTest {
     void createTransaction_AccountNotOwned_ThrowsException() {
         when(accountService.accountBelongsToUser(accountId, userId)).thenReturn(false);
 
-        assertThrows(BadRequestException.class, 
+        assertThrows(BadRequestException.class,
                 () -> transactionService.createTransaction(userId, transactionDto));
         verify(transactionRepository, never()).save(any(Transaction.class));
     }
@@ -107,6 +115,7 @@ class TransactionServiceTest {
     void deleteTransaction_Success() {
         when(transactionRepository.findByIdAndUserId("transaction123", userId))
                 .thenReturn(Optional.of(transaction));
+        when(goalContributionRepository.findByTransactionId("transaction123")).thenReturn(null);
         doNothing().when(accountService).updateBalance(anyString(), any(BigDecimal.class), anyBoolean());
 
         transactionService.deleteTransaction(userId, "transaction123");

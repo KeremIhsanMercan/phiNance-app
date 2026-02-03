@@ -27,14 +27,13 @@ export const useTransactionsStore = create((set, get) => ({
     }));
   },
 
-  fetchTransactions: async (page = 0) => {
-    const { filters } = get();
+  fetchTransactions: async (params = {}) => {
     set({ loading: true, error: null });
     try {
       const response = await transactionsApi.getAll({
-        ...filters,
-        page,
+        page: 0,
         size: 20,
+        ...params,
       });
       set({
         transactions: response.data.content,

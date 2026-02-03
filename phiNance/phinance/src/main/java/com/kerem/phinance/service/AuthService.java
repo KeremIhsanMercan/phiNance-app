@@ -2,7 +2,9 @@ package com.kerem.phinance.service;
 
 import com.kerem.phinance.dto.auth.*;
 import com.kerem.phinance.exception.BadRequestException;
+import com.kerem.phinance.model.Category;
 import com.kerem.phinance.model.User;
+import com.kerem.phinance.repository.CategoryRepository;
 import com.kerem.phinance.repository.UserRepository;
 import com.kerem.phinance.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +15,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -24,6 +28,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthenticationManager authenticationManager;
+    private final CategoryRepository categoryRepository;
 
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -44,6 +49,9 @@ public class AuthService {
         // Email verification removed: mark as verified and save user
         user.setEmailVerified(true);
         userRepository.save(user);
+
+        // Create default categories for new user
+        createDefaultCategories(user.getId());
 
         // Generate tokens
         String accessToken = jwtTokenProvider.generateToken(user.getEmail());
@@ -146,5 +154,67 @@ public class AuthService {
                         .emailVerified(user.isEmailVerified())
                         .build())
                 .build();
+    }
+
+    private void createDefaultCategories(String userId) {
+        List<Category> defaultCategories = new ArrayList<>();
+
+        // Salary (INCOME)
+        Category salary = new Category();
+        salary.setUserId(userId);
+        salary.setName("Salary");
+        salary.setType(Category.CategoryType.INCOME);
+        salary.setColor("#6ee772"); // Emerald green
+        defaultCategories.add(salary);
+
+        // Rent (INCOME)
+        Category rentIncome = new Category();
+        rentIncome.setUserId(userId);
+        rentIncome.setName("Rent");
+        rentIncome.setType(Category.CategoryType.INCOME);
+        rentIncome.setColor("#3B82F6"); // Blue
+        defaultCategories.add(rentIncome);
+
+        // Food (EXPENSE)
+        Category food = new Category();
+        food.setUserId(userId);
+        food.setName("Food");
+        food.setType(Category.CategoryType.EXPENSE);
+        food.setColor("#f59e0b"); // Amber
+        defaultCategories.add(food);
+
+        // Transportation (EXPENSE)
+        Category transportation = new Category();
+        transportation.setUserId(userId);
+        transportation.setName("Transportation");
+        transportation.setType(Category.CategoryType.EXPENSE);
+        transportation.setColor("#A78BFA"); // Purple
+        defaultCategories.add(transportation);
+
+        // Entertainment (EXPENSE)
+        Category entertainment = new Category();
+        entertainment.setUserId(userId);
+        entertainment.setName("Entertainment");
+        entertainment.setType(Category.CategoryType.EXPENSE);
+        entertainment.setColor("#F472B6"); // Pink
+        defaultCategories.add(entertainment);
+
+        // Healthcare (EXPENSE)
+        Category healthcare = new Category();
+        healthcare.setUserId(userId);
+        healthcare.setName("Healthcare");
+        healthcare.setType(Category.CategoryType.EXPENSE);
+        healthcare.setColor("#EF4444"); // Red
+        defaultCategories.add(healthcare);
+
+        // Rent (EXPENSE)
+        Category rentExpense = new Category();
+        rentExpense.setUserId(userId);
+        rentExpense.setName("Rent");
+        rentExpense.setType(Category.CategoryType.EXPENSE);
+        rentExpense.setColor("#3B82F6"); // Blue
+        defaultCategories.add(rentExpense);
+
+        categoryRepository.saveAll(defaultCategories);
     }
 }
