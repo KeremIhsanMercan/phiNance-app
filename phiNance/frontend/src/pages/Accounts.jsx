@@ -17,6 +17,8 @@ import {
   BuildingLibraryIcon,
   CurrencyDollarIcon,
   ChartBarIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 import { FaPiggyBank } from 'react-icons/fa';
 
@@ -30,33 +32,54 @@ const accountTypes = [
 
 const colors = [
   '#f59e0b',
+  '#fbbf24',
   '#C57F08',
+  '#fde047',
   '#c5b23a',
   '#8ed334',
+  '#4ade80',
   '#6ee772',
   '#60f0fa',
+  '#22d3ee',
   '#3B82F6',
+  '#6366f1',
   '#A78BFA',
   '#F472B6',
+  '#fb7185',
   '#EF4444',
 ];
 
+
 export default function Accounts() {
-  const { accounts, loading, fetchAccounts, createAccount, updateAccount, archiveAccount } =
-    useAccountsStore();
+  const { 
+    accounts, 
+    loading, 
+    totalPages, 
+    totalElements, 
+    currentPage, 
+    pageSize,
+    fetchAccounts, 
+    createAccount, 
+    updateAccount, 
+    archiveAccount 
+  } = useAccountsStore();
   const { user } = useAuthStore();
   const formatCurrency = useCurrencyFormatter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [deletingAccountId, setDeletingAccountId] = useState(null);
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState(9);
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDirection, setSortDirection] = useState('asc');
   
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm();
   const selectedColor = watch('color', colors[0]);
 
   useEffect(() => {
-    fetchAccounts();
-  }, [fetchAccounts]);
+    fetchAccounts(page, size, sortBy, sortDirection);
+  }, [page, size, sortBy, sortDirection]);
 
   const openCreateModal = () => {
     setEditingAccount(null);
@@ -112,6 +135,7 @@ export default function Accounts() {
         toast.success('Account created successfully');
       }
       closeModal();
+      fetchAccounts(page, size, sortBy, sortDirection);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Operation failed');
     }
@@ -123,6 +147,7 @@ export default function Accounts() {
       toast.success('Account archived successfully');
       setIsDeleteDialogOpen(false);
       setDeletingAccountId(null);
+      fetchAccounts(page, size, sortBy, sortDirection);
     } catch (error) {
       toast.error('Failed to archive account');
     }
@@ -143,9 +168,9 @@ export default function Accounts() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Accounts</h1>
-        <button onClick={openCreateModal} className="btn-primary flex items-center gap-2">
+        <button onClick={openCreateModal} className="btn-primary flex items-center gap-2 text-sm sm:text-base">
           <PlusIcon className="h-5 w-5" />
           Add Account
         </button>
@@ -225,6 +250,47 @@ export default function Accounts() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-sm text-gray-700 text-center sm:text-left">
+            Showing {currentPage * pageSize + 1} to{' '}
+            {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} accounts
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-center">
+            <button
+              onClick={() => setPage(page - 1)}
+              disabled={page === 0}
+              className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex-shrink-0"
+            >
+              <ChevronLeftIcon className="h-5 w-5" />
+            </button>
+            <div className="flex gap-1 overflow-x-auto max-w-[200px] sm:max-w-md hide-scrollbar">
+              {[...Array(totalPages)].map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setPage(index)}
+                  className={`px-3 py-2 text-sm font-medium rounded-lg border flex-shrink-0 ${
+                    currentPage === index
+                      ? 'bg-primary-600 text-white border-primary-600'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setPage(page + 1)}
+              disabled={page >= totalPages - 1}
+              className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex-shrink-0"
+            >
+              <ChevronRightIcon className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       )}
 

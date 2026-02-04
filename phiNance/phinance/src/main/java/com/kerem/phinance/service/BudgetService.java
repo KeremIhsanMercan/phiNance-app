@@ -8,7 +8,10 @@ import com.kerem.phinance.model.User;
 import com.kerem.phinance.repository.BudgetRepository;
 import com.kerem.phinance.repository.TransactionRepository;
 import com.kerem.phinance.repository.UserRepository;
+import com.kerem.phinance.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -25,25 +28,34 @@ public class BudgetService {
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
 
-    public List<BudgetDto> getBudgetsByMonth(String userId, int year, int month) {
-        return budgetRepository.findByUserIdAndYearAndMonth(userId, year, month).stream()
-                .map(this::mapToDto)
-                .collect(Collectors.toList());
+    public Page<BudgetDto> getBudgetsByMonthPaginated(int year, int month, Pageable pageable) {
+        String userId = SecurityUtils.getCurrentUserId();
+        return budgetRepository.findByUserIdAndYearAndMonth(userId, year, month, pageable)
+                .map(this::mapToDto);
     }
 
-    public BudgetDto getBudgetById(String userId, String budgetId) {
+    public Page<BudgetDto> getAllBudgetsPaginated(Pageable pageable) {
+        String userId = SecurityUtils.getCurrentUserId();
+        // sorted by target date ascending
+        return budgetRepository.findByUserId(userId, pageable)
+                .map(this::mapToDto);
+    }
+
+    public BudgetDto getBudgetById(String budgetId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Budget budget = budgetRepository.findByIdAndUserId(budgetId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Budget", "id", budgetId));
         return mapToDto(budget);
     }
 
-    public BudgetDto createBudget(String userId, BudgetDto dto) {
+    public BudgetDto createBudget(BudgetDto dto) {
+        String userId = SecurityUtils.getCurrentUserId();
         // Check if budget already exists for this category and period
         Optional<Budget> existing = budgetRepository.findByUserIdAndCategoryIdAndYearAndMonth(
                 userId, dto.getCategoryId(), dto.getYear(), dto.getMonth());
 
         if (existing.isPresent()) {
-            return updateBudget(userId, existing.get().getId(), dto);
+            return updateBudget(existing.get().getId(), dto);
         }
 
         // Get existing transactions in this category for the given month
@@ -73,7 +85,8 @@ public class BudgetService {
         return mapToDto(saved);
     }
 
-    public BudgetDto updateBudget(String userId, String budgetId, BudgetDto dto) {
+    public BudgetDto updateBudget(String budgetId, BudgetDto dto) {
+        String userId = SecurityUtils.getCurrentUserId();
         Budget budget = budgetRepository.findByIdAndUserId(budgetId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Budget", "id", budgetId));
 
@@ -86,7 +99,8 @@ public class BudgetService {
         return mapToDto(saved);
     }
 
-    public void deleteBudget(String userId, String budgetId) {
+    public void deleteBudget(String budgetId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Budget budget = budgetRepository.findByIdAndUserId(budgetId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Budget", "id", budgetId));
 
@@ -120,7 +134,8 @@ public class BudgetService {
         }
     }
 
-    public List<BudgetDto> compareBudgets(String userId, int year1, int month1, int year2, int month2) {
+    public List<BudgetDto> compareBudgets(int year1, int month1, int year2, int month2) {
+        String userId = SecurityUtils.getCurrentUserId();
         List<Budget> budgets1 = budgetRepository.findByUserIdAndYearAndMonth(userId, year1, month1);
         List<Budget> budgets2 = budgetRepository.findByUserIdAndYearAndMonth(userId, year2, month2);
 

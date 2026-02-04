@@ -1,15 +1,17 @@
 package com.kerem.phinance.controller;
 
 import com.kerem.phinance.dto.BudgetDto;
-import com.kerem.phinance.security.UserPrincipal;
 import com.kerem.phinance.service.BudgetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,57 +27,65 @@ public class BudgetController {
 
     @GetMapping
     @Operation(summary = "Get budgets by month")
-    public ResponseEntity<List<BudgetDto>> getBudgetsByMonth(
-            @AuthenticationPrincipal UserPrincipal userPrincipal,
-            @RequestParam int year,
-            @RequestParam int month) {
-        return ResponseEntity.ok(budgetService.getBudgetsByMonth(userPrincipal.getId(), year, month));
+    public ResponseEntity<Page<BudgetDto>> getBudgetsByMonth(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "allocatedAmount") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDirection) {
+
+        Sort.Direction direction = sortDirection.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+        // If year and month are provided, filter by them
+        if (year != null && month != null) {
+            return ResponseEntity.ok(budgetService.getBudgetsByMonthPaginated(year, month, pageable));
+        }
+
+        // Otherwise, return all budgets
+        return ResponseEntity.ok(budgetService.getAllBudgetsPaginated(pageable));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Get budget by ID")
     public ResponseEntity<BudgetDto> getBudgetById(
-            @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable String id) {
-        return ResponseEntity.ok(budgetService.getBudgetById(userPrincipal.getId(), id));
+        return ResponseEntity.ok(budgetService.getBudgetById(id));
     }
 
     @GetMapping("/compare")
     @Operation(summary = "Compare budgets between two months")
     public ResponseEntity<List<BudgetDto>> compareBudgets(
-            @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam int year1,
             @RequestParam int month1,
             @RequestParam int year2,
             @RequestParam int month2) {
         return ResponseEntity.ok(budgetService.compareBudgets(
-                userPrincipal.getId(), year1, month1, year2, month2));
+                year1, month1, year2, month2));
     }
 
     @PostMapping
     @Operation(summary = "Create a new budget")
     public ResponseEntity<BudgetDto> createBudget(
-            @AuthenticationPrincipal UserPrincipal userPrincipal,
             @Valid @RequestBody BudgetDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(budgetService.createBudget(userPrincipal.getId(), dto));
+                .body(budgetService.createBudget(dto));
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Update a budget")
     public ResponseEntity<BudgetDto> updateBudget(
-            @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable String id,
             @Valid @RequestBody BudgetDto dto) {
-        return ResponseEntity.ok(budgetService.updateBudget(userPrincipal.getId(), id, dto));
+        return ResponseEntity.ok(budgetService.updateBudget(id, dto));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete a budget")
     public ResponseEntity<Map<String, String>> deleteBudget(
-            @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable String id) {
-        budgetService.deleteBudget(userPrincipal.getId(), id);
+        budgetService.deleteBudget(id);
         return ResponseEntity.ok(Map.of("message", "Budget deleted successfully"));
     }
 }

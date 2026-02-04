@@ -8,6 +8,7 @@ import com.kerem.phinance.model.Transaction;
 import com.kerem.phinance.repository.AccountRepository;
 import com.kerem.phinance.repository.CategoryRepository;
 import com.kerem.phinance.repository.TransactionRepository;
+import com.kerem.phinance.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -28,7 +29,8 @@ public class DashboardService {
     private final TransactionRepository transactionRepository;
     private final CategoryRepository categoryRepository;
 
-    public DashboardDto getDashboard(String userId) {
+    public DashboardDto getDashboard() {
+        String userId = SecurityUtils.getCurrentUserId();
         // Get all active accounts
         List<Account> accounts = accountRepository.findByUserIdAndArchivedFalse(userId);
 

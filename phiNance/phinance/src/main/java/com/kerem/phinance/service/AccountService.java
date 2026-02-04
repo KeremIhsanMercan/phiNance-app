@@ -9,13 +9,16 @@ import com.kerem.phinance.model.User;
 import com.kerem.phinance.repository.AccountRepository;
 import com.kerem.phinance.repository.TransactionRepository;
 import com.kerem.phinance.repository.UserRepository;
+import com.kerem.phinance.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class AccountService {
@@ -35,19 +38,21 @@ public class AccountService {
         this.transactionService = transactionService;
     }
 
-    public List<AccountDto> getAllAccounts(String userId) {
-        return accountRepository.findByUserIdAndArchivedFalse(userId).stream()
-                .map(this::mapToDto)
-                .collect(Collectors.toList());
+    public Page<AccountDto> getAccountsPaginated(Pageable pageable) {
+        String userId = SecurityUtils.getCurrentUserId();
+        return accountRepository.findByUserIdAndArchivedFalse(userId, pageable)
+                .map(this::mapToDto);
     }
 
-    public AccountDto getAccountById(String userId, String accountId) {
+    public AccountDto getAccountById(String accountId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Account", "id", accountId));
         return mapToDto(account);
     }
 
-    public AccountDto createAccount(String userId, AccountDto dto) {
+    public AccountDto createAccount(AccountDto dto) {
+        String userId = SecurityUtils.getCurrentUserId();
         // Get user's preferred currency
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
@@ -67,7 +72,8 @@ public class AccountService {
         return mapToDto(saved);
     }
 
-    public AccountDto updateAccount(String userId, String accountId, UpdateAccountDto dto) {
+    public AccountDto updateAccount(String accountId, UpdateAccountDto dto) {
+        String userId = SecurityUtils.getCurrentUserId();
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Account", "id", accountId));
 
@@ -81,7 +87,8 @@ public class AccountService {
         return mapToDto(saved);
     }
 
-    public void archiveAccount(String userId, String accountId) {
+    public void archiveAccount(String accountId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Account", "id", accountId));
 
@@ -91,14 +98,15 @@ public class AccountService {
 
         // Revert and delete each transaction (this handles balance reversal, budget updates, and goal contributions)
         for (Transaction transaction : relatedTransactions) {
-            transactionService.deleteTransaction(userId, transaction.getId());
+            transactionService.deleteTransaction(transaction.getId());
         }
 
         account.setArchived(true);
         accountRepository.save(account);
     }
 
-    public void deleteAccount(String userId, String accountId) {
+    public void deleteAccount(String accountId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Account", "id", accountId));
 
@@ -108,13 +116,14 @@ public class AccountService {
 
         // Revert and delete each transaction (this handles balance reversal, budget updates, and goal contributions)
         for (Transaction transaction : relatedTransactions) {
-            transactionService.deleteTransaction(userId, transaction.getId());
+            transactionService.deleteTransaction(transaction.getId());
         }
 
         // Delete the account
         accountRepository.delete(account);
     }
 
+    @Transactional
     public void updateBalance(String accountId, BigDecimal amount, boolean isAddition) {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResourceNotFoundException("Account", "id", accountId));

@@ -71,7 +71,7 @@ export const authApi = {
 
 // Accounts API
 export const accountsApi = {
-  getAll: () => api.get('/accounts'),
+  getAll: (params) => api.get('/accounts', { params }),
   getById: (id) => api.get(`/accounts/${id}`),
   create: (data) => api.post('/accounts', data),
   update: (id, data) => api.put(`/accounts/${id}`, data),
@@ -92,7 +92,7 @@ export const transactionsApi = {
 
 // Categories API
 export const categoriesApi = {
-  getAll: () => api.get('/categories'),
+  getAll: (params) => api.get('/categories', { params }),
   getByType: (type) => api.get(`/categories/type/${type}`),
   getById: (id) => api.get(`/categories/${id}`),
   create: (data) => api.post('/categories', data),
@@ -102,7 +102,7 @@ export const categoriesApi = {
 
 // Budgets API
 export const budgetsApi = {
-  getAll: () => api.get('/budgets'),
+  getAll: (params) => api.get('/budgets', { params }),
   getByMonth: (year, month) => api.get('/budgets', { params: { year, month } }),
   getById: (id) => api.get(`/budgets/${id}`),
   compare: (year1, month1, year2, month2) =>
@@ -114,7 +114,7 @@ export const budgetsApi = {
 
 // Goals API
 export const goalsApi = {
-  getAll: () => api.get('/goals'),
+  getAll: (params) => api.get('/goals', { params }),
   getActive: () => api.get('/goals/active'),
   getById: (id) => api.get(`/goals/${id}`),
   validateDependencies: (id) => api.get(`/goals/${id}/validate-dependencies`),

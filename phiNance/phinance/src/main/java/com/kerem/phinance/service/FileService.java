@@ -2,6 +2,7 @@ package com.kerem.phinance.service;
 
 import com.kerem.phinance.exception.BadRequestException;
 import com.kerem.phinance.security.JwtTokenProvider;
+import com.kerem.phinance.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,7 +34,8 @@ public class FileService {
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
     private static final List<String> ALLOWED_EXTENSIONS = List.of("jpg", "jpeg", "png", "pdf", "gif");
 
-    public List<String> uploadFiles(MultipartFile[] files, String userId) {
+    public List<String> uploadFiles(MultipartFile[] files) {
+        String userId = SecurityUtils.getCurrentUserId();
         List<String> fileUrls = new ArrayList<>();
 
         try {
@@ -73,7 +75,7 @@ public class FileService {
 
                 // Generate temporary access token for this file
                 String fileToken = jwtTokenProvider.generateToken(userId);
-                
+
                 // Return relative URL with token
                 fileUrls.add("/api/files/" + userId + "/" + filename + "?token=" + fileToken);
             }
@@ -105,7 +107,7 @@ public class FileService {
     public Resource getFileWithAuth(String userId, String filename, String token, String authenticatedUser) {
         // Check authentication - either from authenticated user or token
         String validatedUser = null;
-        
+
         if (authenticatedUser != null && !authenticatedUser.isEmpty()) {
             validatedUser = authenticatedUser;
         } else if (token != null && !token.isEmpty()) {
@@ -116,7 +118,7 @@ public class FileService {
                 throw new BadRequestException("Invalid or expired token");
             }
         }
-        
+
         // Security: Ensure user can only access their own files
         if (validatedUser == null || !userId.equals(validatedUser)) {
             throw new BadRequestException("Unauthorized access to file");

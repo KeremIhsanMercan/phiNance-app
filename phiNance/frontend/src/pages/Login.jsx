@@ -117,6 +117,7 @@ export default function Login() {
               type="submit"
               disabled={loading}
               className="btn-primary w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ width: "100%" }}
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>

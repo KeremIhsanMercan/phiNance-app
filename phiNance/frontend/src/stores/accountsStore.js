@@ -5,12 +5,23 @@ export const useAccountsStore = create((set, _get) => ({
   accounts: [],
   loading: false,
   error: null,
+  totalPages: 0,
+  totalElements: 0,
+  currentPage: 0,
+  pageSize: 10,
 
-  fetchAccounts: async () => {
+  fetchAccounts: async (page = 0, size = 10, sortBy = 'name', sortDirection = 'asc') => {
     set({ loading: true, error: null });
     try {
-      const response = await accountsApi.getAll();
-      set({ accounts: response.data, loading: false });
+      const response = await accountsApi.getAll({ page, size, sortBy, sortDirection });
+      set({ 
+        accounts: response.data.content, 
+        totalPages: response.data.totalPages,
+        totalElements: response.data.totalElements,
+        currentPage: response.data.number,
+        pageSize: response.data.size,
+        loading: false 
+      });
     } catch (error) {
       set({ error: error.message, loading: false });
     }

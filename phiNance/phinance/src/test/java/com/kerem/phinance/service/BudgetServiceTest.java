@@ -68,7 +68,7 @@ class BudgetServiceTest {
                 .thenReturn(Collections.emptyList());
         when(budgetRepository.save(any(Budget.class))).thenReturn(budget);
 
-        BudgetDto result = budgetService.createBudget(userId, budgetDto);
+        BudgetDto result = budgetService.createBudget(budgetDto);
 
         assertNotNull(result);
         assertEquals(new BigDecimal("1000.00"), result.getAllocatedAmount());

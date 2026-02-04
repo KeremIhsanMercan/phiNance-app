@@ -18,6 +18,8 @@ import {
   LinkIcon,
   XMarkIcon,
   CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 
 const priorities = [
@@ -28,16 +30,23 @@ const priorities = [
 
 const colors = [
   '#f59e0b',
+  '#fbbf24',
   '#C57F08',
+  '#fde047',
   '#c5b23a',
   '#8ed334',
+  '#4ade80',
   '#6ee772',
   '#60f0fa',
+  '#22d3ee',
   '#3B82F6',
+  '#6366f1',
   '#A78BFA',
   '#F472B6',
+  '#fb7185',
   '#EF4444',
 ];
+
 
 export default function Goals() {
   const [goals, setGoals] = useState([]);
@@ -51,6 +60,11 @@ export default function Goals() {
   const [deletingGoalId, setDeletingGoalId] = useState(null);
   const [selectedColor, setSelectedColor] = useState(colors[0]);
   const [showDependencyDropdown, setShowDependencyDropdown] = useState({});
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState(6);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
   const {
@@ -62,12 +76,16 @@ export default function Goals() {
   useEffect(() => {
     fetchGoals();
     fetchAccounts();
-  }, []);
+  }, [page, size]);
 
   const fetchGoals = async () => {
     try {
-      const response = await goalsApi.getAll();
-      setGoals(response.data);
+      const response = await goalsApi.getAll({ page, size, sortBy: 'name', sortDirection: 'asc' });
+      const goals = response.data.content.sort((a, b) => new Date(a.deadline) - new Date(b.deadline)); // sorted by target date ascending
+      setGoals(goals);
+      setTotalPages(response.data.totalPages);
+      setTotalElements(response.data.totalElements);
+      setCurrentPage(response.data.number);
     } catch (error) {
       toast.error('Failed to fetch goals');
     } finally {
@@ -77,8 +95,8 @@ export default function Goals() {
 
   const fetchAccounts = async () => {
     try {
-      const response = await accountsApi.getAll();
-      setAccounts(response.data);
+      const response = await accountsApi.getAll({ page: 0, size: 100 });
+      setAccounts(response.data.content || []);
     } catch (error) {
       console.error('Failed to fetch accounts:', error);
     }
@@ -249,9 +267,9 @@ export default function Goals() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Savings Goals</h1>
-        <button onClick={openCreateModal} className="btn-primary flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Goals</h1>
+        <button onClick={openCreateModal} className="btn-primary flex items-center gap-2 text-sm sm:text-base">
           <PlusIcon className="h-5 w-5" />
           Add Goal
         </button>
@@ -428,7 +446,8 @@ export default function Goals() {
                         {progress >= 100 && (
                           <button
                             onClick={() => handleMarkComplete(goal.id)}
-                            className="btn-primary w-full flex items-center justify-center gap-2"
+                            className="btn-primary flex items-center justify-center gap-2"
+                            style={{ width: '100%' }}
                           >
                             <CheckCircleIcon className="h-4 w-4" />
                             Mark Complete
@@ -468,6 +487,47 @@ export default function Goals() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-sm text-gray-700 text-center sm:text-left">
+            Showing {currentPage * size + 1} to{' '}
+            {Math.min((currentPage + 1) * size, totalElements)} of {totalElements} goals
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-center">
+            <button
+              onClick={() => setPage(page - 1)}
+              disabled={page === 0}
+              className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex-shrink-0"
+            >
+              <ChevronLeftIcon className="h-5 w-5" />
+            </button>
+            <div className="flex gap-1 overflow-x-auto max-w-[200px] sm:max-w-md hide-scrollbar">
+              {[...Array(totalPages)].map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setPage(index)}
+                  className={`px-3 py-2 text-sm font-medium rounded-lg border flex-shrink-0 ${
+                    currentPage === index
+                      ? 'bg-primary-600 text-white border-primary-600'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setPage(page + 1)}
+              disabled={page >= totalPages - 1}
+              className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex-shrink-0"
+            >
+              <ChevronRightIcon className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       )}
 

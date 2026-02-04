@@ -13,6 +13,8 @@ import {
   TrashIcon,
   ArrowUpIcon,
   ArrowDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 
 const categoryTypes = [
@@ -22,16 +24,23 @@ const categoryTypes = [
 
 const colors = [
   '#f59e0b',
+  '#fbbf24',
   '#C57F08',
+  '#fde047',
   '#c5b23a',
   '#8ed334',
+  '#4ade80',
   '#6ee772',
   '#60f0fa',
+  '#22d3ee',
   '#3B82F6',
+  '#6366f1',
   '#A78BFA',
   '#F472B6',
+  '#fb7185',
   '#EF4444',
 ];
+
 
 const icons = [
   'ShoppingCart', 'Home', 'Car', 'Utensils', 'Film',
@@ -45,18 +54,57 @@ export default function Categories() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [deletingCategoryId, setDeletingCategoryId] = useState(null);
+  
+  // Income pagination state
+  const [incomePage, setIncomePage] = useState(0);
+  const [incomeSize] = useState(6);
+  const [incomeTotalPages, setIncomeTotalPages] = useState(0);
+  const [incomeTotalElements, setIncomeTotalElements] = useState(0);
+  const [incomeCurrentPage, setIncomeCurrentPage] = useState(0);
+  
+  // Expense pagination state
+  const [expensePage, setExpensePage] = useState(0);
+  const [expenseSize] = useState(6);
+  const [expenseTotalPages, setExpenseTotalPages] = useState(0);
+  const [expenseTotalElements, setExpenseTotalElements] = useState(0);
+  const [expenseCurrentPage, setExpenseCurrentPage] = useState(0);
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm();
   const selectedColor = watch('color', colors[0]);
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [incomePage, expensePage]);
 
   const fetchCategories = async () => {
+    setLoading(true);
     try {
-      const response = await categoriesApi.getAll();
-      setCategories(response.data);
+      // Fetch all categories with a large page size to get the full list
+      const response = await categoriesApi.getAll({ page: 0, size: 100 });
+      const allCategories = response.data.content || [];
+      
+      // Separate into income and expense
+      const incomeCategories = allCategories.filter((c) => c.type === 'INCOME');
+      const expenseCategories = allCategories.filter((c) => c.type === 'EXPENSE');
+      
+      // Apply pagination manually for income
+      const incomeStart = incomePage * incomeSize;
+      const incomeEnd = incomeStart + incomeSize;
+      const paginatedIncome = incomeCategories.slice(incomeStart, incomeEnd);
+      setIncomeTotalPages(Math.ceil(incomeCategories.length / incomeSize));
+      setIncomeTotalElements(incomeCategories.length);
+      setIncomeCurrentPage(incomePage);
+      
+      // Apply pagination manually for expense
+      const expenseStart = expensePage * expenseSize;
+      const expenseEnd = expenseStart + expenseSize;
+      const paginatedExpense = expenseCategories.slice(expenseStart, expenseEnd);
+      setExpenseTotalPages(Math.ceil(expenseCategories.length / expenseSize));
+      setExpenseTotalElements(expenseCategories.length);
+      setExpenseCurrentPage(expensePage);
+      
+      // Combine paginated results
+      setCategories([...paginatedIncome, ...paginatedExpense]);
     } catch (error) {
       toast.error('Failed to fetch categories');
     } finally {
@@ -139,9 +187,9 @@ export default function Categories() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
-        <button onClick={openCreateModal} className="btn-primary flex items-center gap-2">
+        <button onClick={openCreateModal} className="btn-primary flex items-center gap-2 text-sm sm:text-base">
           <PlusIcon className="h-5 w-5" />
           Add Category
         </button>
@@ -183,6 +231,47 @@ export default function Categories() {
                 ))}
               </div>
             )}
+            
+            {/* Income Pagination */}
+            {incomeTotalPages > 1 && (
+              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="text-sm text-gray-700 text-center sm:text-left">
+                  Showing {incomeCurrentPage * incomeSize + 1} to{' '}
+                  {Math.min((incomeCurrentPage + 1) * incomeSize, incomeTotalElements)} of {incomeTotalElements} income categories
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-center">
+                  <button
+                    onClick={() => setIncomePage(incomePage - 1)}
+                    disabled={incomePage === 0}
+                    className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex-shrink-0"
+                  >
+                    <ChevronLeftIcon className="h-5 w-5" />
+                  </button>
+                  <div className="flex gap-1 overflow-x-auto max-w-[200px] sm:max-w-md hide-scrollbar">
+                    {[...Array(incomeTotalPages)].map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setIncomePage(index)}
+                        className={`px-3 py-2 text-sm font-medium rounded-lg border flex-shrink-0 ${
+                          incomeCurrentPage === index
+                            ? 'bg-primary-600 text-white border-primary-600'
+                            : 'border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {index + 1}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setIncomePage(incomePage + 1)}
+                    disabled={incomePage >= incomeTotalPages - 1}
+                    className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex-shrink-0"
+                  >
+                    <ChevronRightIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Expense Categories */}
@@ -206,6 +295,47 @@ export default function Categories() {
                     }}
                   />
                 ))}
+              </div>
+            )}
+            
+            {/* Expense Pagination */}
+            {expenseTotalPages > 1 && (
+              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="text-sm text-gray-700 text-center sm:text-left">
+                  Showing {expenseCurrentPage * expenseSize + 1} to{' '}
+                  {Math.min((expenseCurrentPage + 1) * expenseSize, expenseTotalElements)} of {expenseTotalElements} expense categories
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-center">
+                  <button
+                    onClick={() => setExpensePage(expensePage - 1)}
+                    disabled={expensePage === 0}
+                    className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex-shrink-0"
+                  >
+                    <ChevronLeftIcon className="h-5 w-5" />
+                  </button>
+                  <div className="flex gap-1 overflow-x-auto max-w-[200px] sm:max-w-md hide-scrollbar">
+                    {[...Array(expenseTotalPages)].map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setExpensePage(index)}
+                        className={`px-3 py-2 text-sm font-medium rounded-lg border flex-shrink-0 ${
+                          expenseCurrentPage === index
+                            ? 'bg-primary-600 text-white border-primary-600'
+                            : 'border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {index + 1}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setExpensePage(expensePage + 1)}
+                    disabled={expensePage >= expenseTotalPages - 1}
+                    className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex-shrink-0"
+                  >
+                    <ChevronRightIcon className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
             )}
           </div>

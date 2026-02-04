@@ -77,7 +77,7 @@ class TransactionServiceTest {
         doNothing().when(accountService).updateBalance(anyString(), any(BigDecimal.class), anyBoolean());
         doNothing().when(budgetService).updateSpentAmount(anyString(), anyString(), any(BigDecimal.class), any(LocalDate.class));
 
-        TransactionDto result = transactionService.createTransaction(userId, transactionDto);
+        TransactionDto result = transactionService.createTransaction(transactionDto);
 
         assertNotNull(result);
         assertEquals(new BigDecimal("100.00"), result.getAmount());
@@ -91,7 +91,7 @@ class TransactionServiceTest {
         when(accountService.accountBelongsToUser(accountId, userId)).thenReturn(false);
 
         assertThrows(BadRequestException.class,
-                () -> transactionService.createTransaction(userId, transactionDto));
+                () -> transactionService.createTransaction(transactionDto));
         verify(transactionRepository, never()).save(any(Transaction.class));
     }
 
@@ -105,7 +105,7 @@ class TransactionServiceTest {
         when(transactionRepository.save(any(Transaction.class))).thenReturn(transaction);
         doNothing().when(accountService).updateBalance(anyString(), any(BigDecimal.class), anyBoolean());
 
-        TransactionDto result = transactionService.createTransaction(userId, transactionDto);
+        TransactionDto result = transactionService.createTransaction(transactionDto);
 
         assertNotNull(result);
         verify(accountService).updateBalance(eq(accountId), eq(new BigDecimal("100.00")), eq(true));
@@ -118,7 +118,7 @@ class TransactionServiceTest {
         when(goalContributionRepository.findByTransactionId("transaction123")).thenReturn(null);
         doNothing().when(accountService).updateBalance(anyString(), any(BigDecimal.class), anyBoolean());
 
-        transactionService.deleteTransaction(userId, "transaction123");
+        transactionService.deleteTransaction("transaction123");
 
         verify(transactionRepository).delete(transaction);
         verify(accountService).updateBalance(eq(accountId), eq(new BigDecimal("100.00")), eq(true));

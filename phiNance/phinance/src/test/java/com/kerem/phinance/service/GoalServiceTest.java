@@ -78,7 +78,7 @@ class GoalServiceTest {
     void validateGoalDependencies_NoDependencies_ReturnsTrue() {
         when(goalRepository.findByIdAndUserId("goal123", userId)).thenReturn(Optional.of(goal));
 
-        boolean result = goalService.validateGoalDependencies(userId, "goal123");
+        boolean result = goalService.validateGoalDependencies("goal123");
 
         assertTrue(result);
     }
@@ -90,7 +90,7 @@ class GoalServiceTest {
         when(goalRepository.findByIdAndUserId("goal123", userId)).thenReturn(Optional.of(goal));
         when(goalRepository.findById("dependency123")).thenReturn(Optional.of(dependencyGoal));
 
-        boolean result = goalService.validateGoalDependencies(userId, "goal123");
+        boolean result = goalService.validateGoalDependencies("goal123");
 
         assertFalse(result);
     }
@@ -103,7 +103,7 @@ class GoalServiceTest {
         when(goalRepository.findByIdAndUserId("goal123", userId)).thenReturn(Optional.of(goal));
         when(goalRepository.findById("dependency123")).thenReturn(Optional.of(dependencyGoal));
 
-        boolean result = goalService.validateGoalDependencies(userId, "goal123");
+        boolean result = goalService.validateGoalDependencies("goal123");
 
         assertTrue(result);
     }
@@ -116,7 +116,7 @@ class GoalServiceTest {
         when(goalRepository.findById("dependency123")).thenReturn(Optional.of(dependencyGoal));
 
         assertThrows(BadRequestException.class,
-                () -> goalService.markAsCompleted(userId, "goal123"));
+                () -> goalService.markAsCompleted("goal123"));
     }
 
     @Test
@@ -128,7 +128,7 @@ class GoalServiceTest {
         when(goalRepository.findById("dependency123")).thenReturn(Optional.of(dependencyGoal));
         when(goalRepository.save(any(Goal.class))).thenReturn(goal);
 
-        GoalDto result = goalService.markAsCompleted(userId, "goal123");
+        GoalDto result = goalService.markAsCompleted("goal123");
 
         assertNotNull(result);
         assertTrue(goal.isCompleted());
@@ -145,7 +145,7 @@ class GoalServiceTest {
                 .thenReturn(Collections.singletonList(dependentGoal));
 
         assertThrows(BadRequestException.class,
-                () -> goalService.deleteGoal(userId, "goal123"));
+                () -> goalService.deleteGoal("goal123"));
     }
 
     @Test
@@ -165,9 +165,9 @@ class GoalServiceTest {
         when(contributionRepository.save(any(GoalContribution.class)))
                 .thenReturn(new GoalContribution());
         when(goalRepository.save(any(Goal.class))).thenReturn(goal);
-        when(transactionService.createTransaction(eq(userId), any())).thenReturn(transactionDto);
+        when(transactionService.createTransaction(any())).thenReturn(transactionDto);
 
-        GoalDto result = goalService.addContribution(userId, contributionDto);
+        GoalDto result = goalService.addContribution(contributionDto);
 
         assertTrue(goal.isCompleted());
         assertEquals(new BigDecimal("5000.00"), goal.getCurrentAmount());

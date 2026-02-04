@@ -7,6 +7,7 @@ import com.kerem.phinance.model.User;
 import com.kerem.phinance.repository.CategoryRepository;
 import com.kerem.phinance.repository.UserRepository;
 import com.kerem.phinance.security.JwtTokenProvider;
+import com.kerem.phinance.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -100,7 +101,8 @@ public class AuthService {
         return buildAuthResponse(user, newAccessToken, newRefreshToken);
     }
 
-    public void changePassword(String userId, ChangePasswordRequest request) {
+    public void changePassword(ChangePasswordRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User not found"));
 
@@ -112,7 +114,8 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    public AuthResponse updateProfile(String userId, UpdateProfileRequest request) {
+    public AuthResponse updateProfile(UpdateProfileRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User not found"));
 
@@ -126,7 +129,8 @@ public class AuthService {
         return buildAuthResponse(saved, null, null);
     }
 
-    public void deleteAccount(String userId, String password) {
+    public void deleteAccount(String password) {
+        String userId = SecurityUtils.getCurrentUserId();
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User not found"));
 

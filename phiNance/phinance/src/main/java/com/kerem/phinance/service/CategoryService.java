@@ -4,7 +4,10 @@ import com.kerem.phinance.dto.CategoryDto;
 import com.kerem.phinance.exception.ResourceNotFoundException;
 import com.kerem.phinance.model.Category;
 import com.kerem.phinance.repository.CategoryRepository;
+import com.kerem.phinance.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -16,25 +19,28 @@ public class CategoryService {
 
     private final CategoryRepository categoryRepository;
 
-    public List<CategoryDto> getAllCategories(String userId) {
-        return categoryRepository.findByUserIdOrIsDefaultTrue(userId).stream()
-                .map(this::mapToDto)
-                .collect(Collectors.toList());
+    public Page<CategoryDto> getCategoriesPaginated(Pageable pageable) {
+        String userId = SecurityUtils.getCurrentUserId();
+        return categoryRepository.findByUserIdOrIsDefaultTrue(userId, pageable)
+                .map(this::mapToDto);
     }
 
-    public List<CategoryDto> getCategoriesByType(String userId, Category.CategoryType type) {
+    public List<CategoryDto> getCategoriesByType(Category.CategoryType type) {
+        String userId = SecurityUtils.getCurrentUserId();
         return categoryRepository.findByUserIdAndType(userId, type).stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
 
-    public CategoryDto getCategoryById(String userId, String categoryId) {
+    public CategoryDto getCategoryById(String categoryId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", categoryId));
         return mapToDto(category);
     }
 
-    public CategoryDto createCategory(String userId, CategoryDto dto) {
+    public CategoryDto createCategory(CategoryDto dto) {
+        String userId = SecurityUtils.getCurrentUserId();
         Category category = new Category();
         category.setUserId(userId);
         category.setName(dto.getName());
@@ -47,7 +53,8 @@ public class CategoryService {
         return mapToDto(saved);
     }
 
-    public CategoryDto updateCategory(String userId, String categoryId, CategoryDto dto) {
+    public CategoryDto updateCategory(String categoryId, CategoryDto dto) {
+        String userId = SecurityUtils.getCurrentUserId();
         Category category = categoryRepository.findByIdAndUserId(categoryId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", categoryId));
 
@@ -61,7 +68,8 @@ public class CategoryService {
         return mapToDto(saved);
     }
 
-    public void deleteCategory(String userId, String categoryId) {
+    public void deleteCategory(String categoryId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Category category = categoryRepository.findByIdAndUserId(categoryId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", categoryId));
 

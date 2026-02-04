@@ -64,7 +64,11 @@ export default function Transactions() {
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
 
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
+    defaultValues: {
+      accountId: '',
+    }
+  });
   const watchType = watch('type', 'EXPENSE');
   const watchRecurring = watch('recurring', false);
 
@@ -72,6 +76,13 @@ export default function Transactions() {
     fetchAccounts();
     fetchCategories();
   }, []);
+
+  useEffect(() => {
+    if (!isModalOpen || editingTransaction) return;
+    if (accounts.length > 0 && !watch('accountId')) {
+      setValue('accountId', accounts[0].id);
+    }
+  }, [accounts, isModalOpen, editingTransaction, setValue, watch]);
 
   // Fetch transactions when filters or sorting changes (with debounce for text inputs)
   useEffect(() => {
@@ -84,8 +95,8 @@ export default function Transactions() {
 
   const fetchCategories = async () => {
     try {
-      const response = await categoriesApi.getAll();
-      setCategories(response.data);
+      const response = await categoriesApi.getAll({ page: 0, size: 100 });
+      setCategories(response.data.content || []);
     } catch (error) {
       console.error('Failed to fetch categories:', error);
     }
@@ -339,37 +350,29 @@ export default function Transactions() {
     return categories.find((c) => c.id === categoryId)?.name || '-';
   };
 
-  if (loading && transactions.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button 
             onClick={() => setShowFilters(!showFilters)} 
-            className="btn-secondary flex items-center gap-2"
+            className="btn-secondary flex items-center gap-2 text-sm sm:text-base"
           >
             <FunnelIcon className="h-5 w-5" />
-            Filters
+            <span className="hidden sm:inline">Filters</span>
           </button>
           <button 
             onClick={exportToCSV} 
-            className="btn-secondary flex items-center gap-2"
+            className="btn-secondary flex items-center gap-2 text-sm sm:text-base"
             disabled={transactions.length === 0}
           >
             <ArrowDownTrayIcon className="h-5 w-5" />
-            Export CSV
+            <span className="hidden sm:inline">Export</span>
           </button>
-          <button onClick={openCreateModal} className="btn-primary flex items-center gap-2">
+          <button onClick={openCreateModal} className="btn-primary flex items-center gap-2 text-sm sm:text-base">
             <PlusIcon className="h-5 w-5" />
-            Add Transaction
+            <span className="hidden sm:inline">Add Transaction</span>
           </button>
         </div>
       </div>
@@ -506,7 +509,11 @@ export default function Transactions() {
         </div>
       )}
 
-      {transactions.length === 0 ? (
+      {loading && transactions.length === 0 ? (
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner size="lg" />
+        </div>
+      ) : transactions.length === 0 ? (
         <EmptyState
           icon={ArrowsRightLeftIcon}
           title="No transactions yet"
@@ -518,7 +525,12 @@ export default function Transactions() {
           }
         />
       ) : (
-        <div className="card">
+        <div className="card relative">
+          {loading && (
+            <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
+              <LoadingSpinner size="md" />
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -646,8 +658,8 @@ export default function Transactions() {
 
           {/* Pagination */}
           {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-              <p className="text-sm text-gray-500">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200">
+              <p className="text-sm text-gray-500 text-center sm:text-left">
                 Showing {pagination.page * pagination.size + 1} to{' '}
                 {Math.min((pagination.page + 1) * pagination.size, pagination.totalElements)} of{' '}
                 {pagination.totalElements} results

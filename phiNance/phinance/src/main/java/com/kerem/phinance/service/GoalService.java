@@ -12,7 +12,10 @@ import com.kerem.phinance.model.Transaction;
 import com.kerem.phinance.repository.AccountRepository;
 import com.kerem.phinance.repository.GoalContributionRepository;
 import com.kerem.phinance.repository.GoalRepository;
+import com.kerem.phinance.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -32,25 +35,28 @@ public class GoalService {
     private final TransactionService transactionService;
     private final AccountService accountService;
 
-    public List<GoalDto> getAllGoals(String userId) {
-        return goalRepository.findByUserId(userId).stream()
-                .map(this::mapToDto)
-                .collect(Collectors.toList());
+    public Page<GoalDto> getGoalsPaginated(Pageable pageable) {
+        String userId = SecurityUtils.getCurrentUserId();
+        return goalRepository.findByUserId(userId, pageable)
+                .map(this::mapToDto);
     }
 
-    public List<GoalDto> getActiveGoals(String userId) {
+    public List<GoalDto> getActiveGoals() {
+        String userId = SecurityUtils.getCurrentUserId();
         return goalRepository.findByUserIdAndCompletedFalse(userId).stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
 
-    public GoalDto getGoalById(String userId, String goalId) {
+    public GoalDto getGoalById(String goalId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Goal goal = goalRepository.findByIdAndUserId(goalId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", goalId));
         return mapToDto(goal);
     }
 
-    public GoalDto createGoal(String userId, GoalDto dto) {
+    public GoalDto createGoal(GoalDto dto) {
+        String userId = SecurityUtils.getCurrentUserId();
         // Create a SAVINGS account for this goal
         Account savingsAccount = new Account();
         savingsAccount.setUserId(userId);
@@ -83,7 +89,8 @@ public class GoalService {
         return mapToDto(saved);
     }
 
-    public GoalDto updateGoal(String userId, String goalId, GoalDto dto) {
+    public GoalDto updateGoal(String goalId, GoalDto dto) {
+        String userId = SecurityUtils.getCurrentUserId();
         Goal goal = goalRepository.findByIdAndUserId(goalId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", goalId));
 
@@ -122,7 +129,8 @@ public class GoalService {
         return mapToDto(saved);
     }
 
-    public void deleteGoal(String userId, String goalId) {
+    public void deleteGoal(String goalId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Goal goal = goalRepository.findByIdAndUserId(goalId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", goalId));
 
@@ -134,13 +142,14 @@ public class GoalService {
 
         // Archive the associated savings account
         if (goal.getSavingsAccountId() != null) {
-            accountService.archiveAccount(userId, goal.getSavingsAccountId());
+            accountService.archiveAccount(goal.getSavingsAccountId());
         }
 
         goalRepository.delete(goal);
     }
 
-    public GoalDto addContribution(String userId, GoalContributionDto dto) {
+    public GoalDto addContribution(GoalContributionDto dto) {
+        String userId = SecurityUtils.getCurrentUserId();
         Goal goal = goalRepository.findByIdAndUserId(dto.getGoalId(), userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", dto.getGoalId()));
 
@@ -158,7 +167,7 @@ public class GoalService {
         transactionDto.setDate(today);
         transactionDto.setRecurring(false);
 
-        TransactionDto createdTransaction = transactionService.createTransaction(userId, transactionDto);
+        TransactionDto createdTransaction = transactionService.createTransaction(transactionDto);
 
         // Create contribution record with transaction ID
         GoalContribution contribution = new GoalContribution();
@@ -185,7 +194,7 @@ public class GoalService {
                     }
                 }
             }
-            
+
             if (canComplete) {
                 goal.setCompleted(true);
             }
@@ -195,7 +204,8 @@ public class GoalService {
         return mapToDto(saved);
     }
 
-    public GoalDto markAsCompleted(String userId, String goalId) {
+    public GoalDto markAsCompleted(String goalId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Goal goal = goalRepository.findByIdAndUserId(goalId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", goalId));
 
@@ -215,7 +225,8 @@ public class GoalService {
         return mapToDto(saved);
     }
 
-    public boolean validateGoalDependencies(String userId, String goalId) {
+    public boolean validateGoalDependencies(String goalId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Goal goal = goalRepository.findByIdAndUserId(goalId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", goalId));
 
@@ -233,7 +244,8 @@ public class GoalService {
         return true;
     }
 
-    public GoalDto addDependency(String userId, String goalId, String dependencyGoalId) {
+    public GoalDto addDependency(String goalId, String dependencyGoalId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Goal goal = goalRepository.findByIdAndUserId(goalId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", goalId));
 
@@ -259,7 +271,8 @@ public class GoalService {
         return mapToDto(saved);
     }
 
-    public GoalDto removeDependency(String userId, String goalId, String dependencyGoalId) {
+    public GoalDto removeDependency(String goalId, String dependencyGoalId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Goal goal = goalRepository.findByIdAndUserId(goalId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal", "id", goalId));
 

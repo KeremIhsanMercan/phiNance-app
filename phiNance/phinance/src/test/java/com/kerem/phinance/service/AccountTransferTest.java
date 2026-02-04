@@ -89,7 +89,7 @@ class AccountTransferTest {
                 .thenReturn(sourceTransaction);
         doNothing().when(accountService).updateBalance(anyString(), any(BigDecimal.class), anyBoolean());
 
-        TransactionDto result = transactionService.createTransaction(userId, transferDto);
+        TransactionDto result = transactionService.createTransaction(transferDto);
 
         assertNotNull(result);
         assertEquals(Transaction.TransactionType.TRANSFER, result.getType());
@@ -103,7 +103,7 @@ class AccountTransferTest {
         when(accountService.accountBelongsToUser("dest123", userId)).thenReturn(false);
 
         assertThrows(BadRequestException.class,
-                () -> transactionService.createTransaction(userId, transferDto));
+                () -> transactionService.createTransaction(transferDto));
     }
 
     @Test
@@ -113,7 +113,7 @@ class AccountTransferTest {
         when(accountService.accountBelongsToUser("source123", userId)).thenReturn(true);
 
         assertThrows(BadRequestException.class,
-                () -> transactionService.createTransaction(userId, transferDto));
+                () -> transactionService.createTransaction(transferDto));
     }
 
     @Test

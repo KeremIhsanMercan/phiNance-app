@@ -10,12 +10,14 @@ import com.kerem.phinance.model.Transaction;
 import com.kerem.phinance.repository.GoalContributionRepository;
 import com.kerem.phinance.repository.GoalRepository;
 import com.kerem.phinance.repository.TransactionRepository;
+import com.kerem.phinance.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -33,13 +35,14 @@ public class TransactionService {
     private final GoalContributionRepository goalContributionRepository;
     private final GoalRepository goalRepository;
 
-    public Page<TransactionDto> getTransactions(String userId, TransactionFilterDto filter) {
+    public Page<TransactionDto> getTransactions(TransactionFilterDto filter) {
+        String userId = SecurityUtils.getCurrentUserId();
         // Build sort
         Sort sort;
         if (filter.getSortBy() != null) {
-            Sort.Direction direction = filter.getSortDirection() != null && 
-                filter.getSortDirection().equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
-            
+            Sort.Direction direction = filter.getSortDirection() != null
+                    && filter.getSortDirection().equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
+
             // Map frontend sort fields to backend fields
             String sortField = filter.getSortBy();
             switch (sortField) {
@@ -51,7 +54,7 @@ public class TransactionService {
                     break;
                 // date, amount, type stay the same
             }
-            
+
             sort = Sort.by(direction, sortField);
         } else {
             // Default sort by date descending
@@ -75,13 +78,14 @@ public class TransactionService {
         ).map(this::mapToDto);
     }
 
-    public List<TransactionDto> getTransactionsForExport(String userId, TransactionFilterDto filter) {
+    public List<TransactionDto> getTransactionsForExport(TransactionFilterDto filter) {
+        String userId = SecurityUtils.getCurrentUserId();
         // Build sort (same as getTransactions)
         Sort sort;
         if (filter.getSortBy() != null) {
-            Sort.Direction direction = filter.getSortDirection() != null && 
-                filter.getSortDirection().equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
-            
+            Sort.Direction direction = filter.getSortDirection() != null
+                    && filter.getSortDirection().equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
+
             String sortField = filter.getSortBy();
             switch (sortField) {
                 case "account":
@@ -91,7 +95,7 @@ public class TransactionService {
                     sortField = "categoryId";
                     break;
             }
-            
+
             sort = Sort.by(direction, sortField);
         } else {
             sort = Sort.by(Sort.Direction.DESC, "date");
@@ -112,13 +116,16 @@ public class TransactionService {
         ).stream().map(this::mapToDto).collect(Collectors.toList());
     }
 
-    public TransactionDto getTransactionById(String userId, String transactionId) {
+    public TransactionDto getTransactionById(String transactionId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Transaction transaction = transactionRepository.findByIdAndUserId(transactionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", "id", transactionId));
         return mapToDto(transaction);
     }
 
-    public TransactionDto createTransaction(String userId, TransactionDto dto) {
+    @Transactional
+    public TransactionDto createTransaction(TransactionDto dto) {
+        String userId = SecurityUtils.getCurrentUserId();
         // Validate account ownership
         if (!accountService.accountBelongsToUser(dto.getAccountId(), userId)) {
             throw new BadRequestException("Account does not belong to user");
@@ -169,7 +176,62 @@ public class TransactionService {
         return mapToDto(saved);
     }
 
-    public TransactionDto updateTransaction(String userId, String transactionId, TransactionDto dto) {
+    @Transactional
+    public TransactionDto createTransactionWithTransactionSchedular(String userId, TransactionDto dto) {
+
+        // Validate account ownership
+        if (!accountService.accountBelongsToUser(dto.getAccountId(), userId)) {
+            throw new BadRequestException("Account does not belong to user");
+        }
+
+        Transaction transaction = new Transaction();
+        transaction.setUserId(userId);
+        transaction.setAccountId(dto.getAccountId());
+        transaction.setType(dto.getType());
+        transaction.setAmount(dto.getAmount());
+        transaction.setCategoryId(dto.getCategoryId());
+        transaction.setDescription(dto.getDescription());
+        transaction.setDate(dto.getDate());
+        transaction.setRecurring(dto.isRecurring());
+        transaction.setRecurrencePattern(dto.getRecurrencePattern());
+        transaction.setAutoGenerated(dto.isAutoGenerated());
+        transaction.setAttachmentUrls(dto.getAttachmentUrls());
+
+        // Handle transfer
+        if (dto.getType() == Transaction.TransactionType.TRANSFER) {
+            if (dto.getTransferToAccountId() == null) {
+                throw new BadRequestException("Transfer destination account is required");
+            }
+            if (!accountService.accountBelongsToUser(dto.getTransferToAccountId(), userId)) {
+                throw new BadRequestException("Destination account does not belong to user");
+            }
+            if (dto.getAccountId().equals(dto.getTransferToAccountId())) {
+                throw new BadRequestException("Source and destination accounts must be different");
+            }
+            transaction.setTransferToAccountId(dto.getTransferToAccountId());
+
+            // Update both account balances
+            // Deduct from source account
+            accountService.updateBalance(dto.getAccountId(), dto.getAmount(), false);
+            // Add to destination account
+            accountService.updateBalance(dto.getTransferToAccountId(), dto.getAmount(), true);
+        } else {
+            // Update account balance for non-transfer transactions
+            updateAccountBalance(transaction);
+        }
+
+        // Update budget if expense
+        if (dto.getType() == Transaction.TransactionType.EXPENSE && dto.getCategoryId() != null) {
+            budgetService.updateSpentAmount(userId, dto.getCategoryId(), dto.getAmount(), dto.getDate());
+        }
+
+        Transaction saved = transactionRepository.save(transaction);
+        return mapToDto(saved);
+    }
+
+    @Transactional
+    public TransactionDto updateTransaction(String transactionId, TransactionDto dto) {
+        String userId = SecurityUtils.getCurrentUserId();
         Transaction transaction = transactionRepository.findByIdAndUserId(transactionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", "id", transactionId));
 
@@ -222,7 +284,7 @@ public class TransactionService {
             Goal goal = goalRepository.findById(contribution.getGoalId()).orElse(null);
             if (goal != null) {
                 boolean wasCompleted = goal.isCompleted();
-                
+
                 // Revert old contribution amount
                 goal.setCurrentAmount(goal.getCurrentAmount().subtract(oldAmount));
                 // Add new contribution amount
@@ -266,7 +328,9 @@ public class TransactionService {
         return mapToDto(saved);
     }
 
-    public void deleteTransaction(String userId, String transactionId) {
+    @Transactional
+    public void deleteTransaction(String transactionId) {
+        String userId = SecurityUtils.getCurrentUserId();
         Transaction transaction = transactionRepository.findByIdAndUserId(transactionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", "id", transactionId));
 
@@ -290,16 +354,16 @@ public class TransactionService {
             Goal goal = goalRepository.findById(contribution.getGoalId()).orElse(null);
             if (goal != null) {
                 boolean wasCompleted = goal.isCompleted();
-                
+
                 // Revert goal progress
                 goal.setCurrentAmount(goal.getCurrentAmount().subtract(contribution.getAmount()));
-                
+
                 // Unmark as completed if it was completed
                 if (goal.getCurrentAmount().compareTo(goal.getTargetAmount()) < 0) {
                     goal.setCompleted(false);
                 }
                 goalRepository.save(goal);
-                
+
                 // If goal was completed but now is not, mark dependent goals as incomplete
                 if (wasCompleted && !goal.isCompleted()) {
                     markDependentGoalsIncomplete(goal.getId());
@@ -312,7 +376,8 @@ public class TransactionService {
         transactionRepository.delete(transaction);
     }
 
-    public List<TransactionDto> getTransactionsByDateRange(String userId, LocalDate startDate, LocalDate endDate) {
+    public List<TransactionDto> getTransactionsByDateRange(LocalDate startDate, LocalDate endDate) {
+        String userId = SecurityUtils.getCurrentUserId();
         return transactionRepository.findByUserIdAndDateBetween(userId, startDate, endDate).stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
@@ -321,12 +386,12 @@ public class TransactionService {
     private void markDependentGoalsIncomplete(String goalId) {
         // Find all goals that depend on this goal
         List<Goal> dependentGoals = goalRepository.findByDependencyGoalIdsContaining(goalId);
-        
+
         for (Goal dependentGoal : dependentGoals) {
             if (dependentGoal.isCompleted()) {
                 dependentGoal.setCompleted(false);
                 goalRepository.save(dependentGoal);
-                
+
                 // Recursively mark goals that depend on this dependent goal
                 markDependentGoalsIncomplete(dependentGoal.getId());
             }

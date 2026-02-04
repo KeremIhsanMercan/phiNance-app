@@ -23,11 +23,9 @@ public class FileController {
 
     @PostMapping("/upload")
     public ResponseEntity<List<String>> uploadFiles(
-            @RequestParam("files") MultipartFile[] files,
-            Authentication authentication) {
+            @RequestParam("files") MultipartFile[] files) {
 
-        String userId = authentication.getName();
-        List<String> fileUrls = fileService.uploadFiles(files, userId);
+        List<String> fileUrls = fileService.uploadFiles(files);
         return ResponseEntity.ok(fileUrls);
     }
 
@@ -38,12 +36,12 @@ public class FileController {
             @RequestParam(required = false) String token,
             Authentication authentication) {
 
-        String authenticatedUser = authentication != null && authentication.isAuthenticated() 
-                ? authentication.getName() 
+        String authenticatedUser = authentication != null && authentication.isAuthenticated()
+                ? authentication.getName()
                 : null;
 
         Resource resource = fileService.getFileWithAuth(userId, filename, token, authenticatedUser);
-        
+
         if (resource == null) {
             return ResponseEntity.notFound().build();
         }

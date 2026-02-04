@@ -66,7 +66,6 @@ You are expected to develop a comprehensive personal finance tracking applicatio
   - Remaining amount
   - Period (month/year)
 - **Budget alerts** when spending exceeds 80% and 100%
-- **Compare budgets** across different months
 
 ### 6. Financial Goals
 - **Create savings goals** with:
@@ -104,7 +103,6 @@ You are expected to develop a comprehensive personal finance tracking applicatio
 ### 8. Search and Filter
 - **Advanced search** across all transactions
 - **Filter by multiple criteria** simultaneously
-- **Save favorite filters** for quick access
 
 ---
 
