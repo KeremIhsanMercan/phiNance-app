@@ -110,7 +110,12 @@ export default function Transactions() {
   const fetchCategories = async () => {
     try {
       const response = await categoriesApi.getAll({ page: 0, size: 100 });
-      setCategories(response.data.content || []);
+      // first list income categories, then expense categories
+      const sortedCategories = response.data.content.sort((a, b) => {
+        if (a.type === b.type) return 0;
+        return a.type === 'INCOME' ? -1 : 1;
+      });
+      setCategories(sortedCategories || []);
     } catch (error) {
       console.error('Failed to fetch categories:', error);
     }

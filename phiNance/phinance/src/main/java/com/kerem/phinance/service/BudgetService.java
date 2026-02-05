@@ -30,14 +30,14 @@ public class BudgetService {
 
     public Page<BudgetDto> getBudgetsByMonthPaginated(int year, int month, Pageable pageable) {
         String userId = SecurityUtils.getCurrentUserId();
-        return budgetRepository.findByUserIdAndYearAndMonth(userId, year, month, pageable)
+        return budgetRepository.findByUserIdAndYearAndMonthCaseInsensitive(userId, year, month, pageable)
                 .map(this::mapToDto);
     }
 
     public Page<BudgetDto> getAllBudgetsPaginated(Pageable pageable) {
         String userId = SecurityUtils.getCurrentUserId();
         // sorted by target date ascending
-        return budgetRepository.findByUserId(userId, pageable)
+        return budgetRepository.findByUserIdCaseInsensitive(userId, pageable)
                 .map(this::mapToDto);
     }
 

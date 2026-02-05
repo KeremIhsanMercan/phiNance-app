@@ -37,7 +37,7 @@ public class GoalService {
 
     public Page<GoalDto> getGoalsPaginated(Pageable pageable) {
         String userId = SecurityUtils.getCurrentUserId();
-        return goalRepository.findByUserId(userId, pageable)
+        return goalRepository.findByUserIdCaseInsensitive(userId, pageable)
                 .map(this::mapToDto);
     }
 

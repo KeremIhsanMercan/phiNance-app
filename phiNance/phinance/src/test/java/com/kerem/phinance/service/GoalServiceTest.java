@@ -8,11 +8,14 @@ import com.kerem.phinance.model.Goal;
 import com.kerem.phinance.model.GoalContribution;
 import com.kerem.phinance.repository.GoalContributionRepository;
 import com.kerem.phinance.repository.GoalRepository;
+import com.kerem.phinance.security.SecurityUtils;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -48,9 +51,12 @@ class GoalServiceTest {
     private Goal dependencyGoal;
     private GoalDto goalDto;
     private final String userId = "user123";
+    private MockedStatic<SecurityUtils> securityUtilsMock;
 
     @BeforeEach
     void setUp() {
+        securityUtilsMock = mockStatic(SecurityUtils.class);
+        securityUtilsMock.when(SecurityUtils::getCurrentUserId).thenReturn(userId);
         goal = new Goal();
         goal.setId("goal123");
         goal.setUserId(userId);
@@ -146,6 +152,11 @@ class GoalServiceTest {
 
         assertThrows(BadRequestException.class,
                 () -> goalService.deleteGoal("goal123"));
+    }
+
+    @AfterEach
+    void tearDown() {
+        securityUtilsMock.close();
     }
 
     @Test

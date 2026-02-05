@@ -64,7 +64,7 @@ MongoDB replica set is required for transaction support.
 # Create data directory
 mkdir C:\data\db
 
-# Start MongoDB with replica set
+# Start MongoDB with replica set (care for your mongod.exe path)
 & "C:\Program Files\MongoDB\Server\8.2\bin\mongod.exe" --dbpath C:\data\db --replSet rs0
 
 # In a new terminal, initialize replica set
@@ -137,7 +137,7 @@ cd phiNance/frontend
 npm run dev
 ```
 
-Frontend will start on: **http://localhost:5173**
+Frontend will start on: **http://localhost:3000**
 
 ### Option 2: Production Build
 
@@ -164,7 +164,7 @@ serve -s dist
 ## Default Access
 
 After starting the application:
-1. Navigate to **http://localhost:5173**
+1. Navigate to **http://localhost:3000**
 2. Click **Register** to create a new account
 3. Login with your credentials
 
@@ -692,7 +692,7 @@ phiNance-app/
 ### Frontend Won't Start
 - Check Node version: `node --version` (should be 18+)
 - Clear node_modules: `rm -rf node_modules && npm install`
-- Check port 5173 is available
+- Check port 3000 is available
 
 ### Transaction Errors
 - Verify MongoDB is running in replica set mode

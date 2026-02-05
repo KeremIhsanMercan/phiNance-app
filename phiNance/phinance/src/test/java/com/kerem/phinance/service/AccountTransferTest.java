@@ -7,11 +7,14 @@ import com.kerem.phinance.model.Account;
 import com.kerem.phinance.model.Transaction;
 import com.kerem.phinance.repository.AccountRepository;
 import com.kerem.phinance.repository.TransactionRepository;
+import com.kerem.phinance.security.SecurityUtils;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -45,9 +48,12 @@ class AccountTransferTest {
     private Account destAccount;
     private TransactionDto transferDto;
     private final String userId = "user123";
+    private MockedStatic<SecurityUtils> securityUtilsMock;
 
     @BeforeEach
     void setUp() {
+        securityUtilsMock = mockStatic(SecurityUtils.class);
+        securityUtilsMock.when(SecurityUtils::getCurrentUserId).thenReturn(userId);
         sourceAccount = new Account();
         sourceAccount.setId("source123");
         sourceAccount.setUserId(userId);
@@ -125,6 +131,11 @@ class AccountTransferTest {
         BigDecimal expectedBalance = sourceAccount.getCurrentBalance().subtract(transferAmount);
 
         assertEquals(new BigDecimal("800.00"), expectedBalance);
+    }
+
+    @AfterEach
+    void tearDown() {
+        securityUtilsMock.close();
     }
 
     @Test

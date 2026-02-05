@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface BudgetRepository extends MongoRepository<Budget, String> {
+public interface BudgetRepository extends MongoRepository<Budget, String>, BudgetRepositoryCustom {
 
     List<Budget> findByUserIdAndYearAndMonth(String userId, int year, int month);
 

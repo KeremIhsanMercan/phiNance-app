@@ -6,11 +6,14 @@ import com.kerem.phinance.model.User;
 import com.kerem.phinance.repository.BudgetRepository;
 import com.kerem.phinance.repository.TransactionRepository;
 import com.kerem.phinance.repository.UserRepository;
+import com.kerem.phinance.security.SecurityUtils;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -40,9 +43,12 @@ class BudgetServiceTest {
     private Budget budget;
     private BudgetDto budgetDto;
     private final String userId = "user123";
+    private MockedStatic<SecurityUtils> securityUtilsMock;
 
     @BeforeEach
     void setUp() {
+        securityUtilsMock = mockStatic(SecurityUtils.class);
+        securityUtilsMock.when(SecurityUtils::getCurrentUserId).thenReturn(userId);
         budget = new Budget();
         budget.setId("budget123");
         budget.setUserId(userId);
@@ -73,6 +79,11 @@ class BudgetServiceTest {
         assertNotNull(result);
         assertEquals(new BigDecimal("1000.00"), result.getAllocatedAmount());
         verify(budgetRepository).save(any(Budget.class));
+    }
+
+    @AfterEach
+    void tearDown() {
+        securityUtilsMock.close();
     }
 
     @Test

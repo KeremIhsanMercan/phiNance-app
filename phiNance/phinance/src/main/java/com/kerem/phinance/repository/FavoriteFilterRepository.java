@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface FavoriteFilterRepository extends MongoRepository<FavoriteFilter, String> {
+public interface FavoriteFilterRepository extends MongoRepository<FavoriteFilter, String>, FavoriteFilterRepositoryCustom {
 
     List<FavoriteFilter> findByUserId(String userId);
 

@@ -8,11 +8,14 @@ import com.kerem.phinance.model.Transaction;
 import com.kerem.phinance.repository.GoalContributionRepository;
 import com.kerem.phinance.repository.GoalRepository;
 import com.kerem.phinance.repository.TransactionRepository;
+import com.kerem.phinance.security.SecurityUtils;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -49,9 +52,12 @@ class TransactionServiceTest {
     private Transaction transaction;
     private final String userId = "user123";
     private final String accountId = "account123";
+    private MockedStatic<SecurityUtils> securityUtilsMock;
 
     @BeforeEach
     void setUp() {
+        securityUtilsMock = mockStatic(SecurityUtils.class);
+        securityUtilsMock.when(SecurityUtils::getCurrentUserId).thenReturn(userId);
         transactionDto = new TransactionDto();
         transactionDto.setAccountId(accountId);
         transactionDto.setType(Transaction.TransactionType.EXPENSE);
@@ -122,5 +128,10 @@ class TransactionServiceTest {
 
         verify(transactionRepository).delete(transaction);
         verify(accountService).updateBalance(eq(accountId), eq(new BigDecimal("100.00")), eq(true));
+    }
+
+    @AfterEach
+    void tearDown() {
+        securityUtilsMock.close();
     }
 }

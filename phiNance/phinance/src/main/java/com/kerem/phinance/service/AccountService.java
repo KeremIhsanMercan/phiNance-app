@@ -40,7 +40,7 @@ public class AccountService {
 
     public Page<AccountDto> getAccountsPaginated(Pageable pageable) {
         String userId = SecurityUtils.getCurrentUserId();
-        return accountRepository.findByUserIdAndArchivedFalse(userId, pageable)
+        return accountRepository.findByUserIdAndArchivedFalseCaseInsensitive(userId, pageable)
                 .map(this::mapToDto);
     }
 

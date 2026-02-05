@@ -1,6 +1,7 @@
 package com.kerem.phinance.repository;
 
 import com.kerem.phinance.model.Transaction;
+import org.springframework.data.mongodb.core.query.Collation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -180,6 +181,7 @@ public class TransactionRepositoryImpl implements TransactionRepositoryCustom {
 
             long total = mongoTemplate.count(query, Transaction.class);
             query.with(pageable);
+            query.collation(Collation.of("en"));
             List<Transaction> transactions = mongoTemplate.find(query, Transaction.class);
 
             return new PageImpl<>(transactions, pageable, total);

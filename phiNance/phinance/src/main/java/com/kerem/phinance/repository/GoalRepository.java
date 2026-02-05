@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface GoalRepository extends MongoRepository<Goal, String> {
+public interface GoalRepository extends MongoRepository<Goal, String>, GoalRepositoryCustom {
 
     List<Goal> findByUserId(String userId);
 

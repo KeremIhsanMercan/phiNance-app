@@ -30,6 +30,7 @@ public class FavoriteFilterService {
         return favoriteFilterRepository.findByUserId(userId)
                 .stream()
                 .map(this::convertToDTO)
+                .sorted((a, b) -> a.getName().compareToIgnoreCase(b.getName()))
                 .collect(Collectors.toList());
     }
 

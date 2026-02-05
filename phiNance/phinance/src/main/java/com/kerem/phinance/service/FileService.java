@@ -88,7 +88,8 @@ public class FileService {
         }
     }
 
-    public Resource getFile(String userId, String filename) {
+    public Resource getFile(String filename) {
+        String userId = SecurityUtils.getCurrentUserId();
         try {
             Path filePath = Paths.get(uploadDir, userId, filename);
             Resource resource = new UrlResource(filePath.toUri());
@@ -104,7 +105,12 @@ public class FileService {
         }
     }
 
-    public Resource getFileWithAuth(String userId, String filename, String token, String authenticatedUserId) {
+    public Resource getFileWithAuth(String requestedUserId, String filename, String token, String authenticatedUserId) {
+        // SECURITY: Prevent path traversal attacks
+        if (filename.contains("..") || filename.contains("//") || filename.contains("\\\\")) {
+            throw new BadRequestException("Invalid filename");
+        }
+
         String validatedUserId = null;
 
         // If user is authenticated via session, use that
@@ -128,11 +134,23 @@ public class FileService {
         }
 
         // Security: Ensure the validated user matches the requested userId
-        if (!userId.equals(validatedUserId)) {
+        if (!requestedUserId.equals(validatedUserId)) {
             throw new BadRequestException("Unauthorized access to file");
         }
 
-        return getFile(userId, filename);
+        try {
+            Path filePath = Paths.get(uploadDir, requestedUserId, filename);
+            Resource resource = new UrlResource(filePath.toUri());
+
+            if (!resource.exists() || !resource.isReadable()) {
+                return null;
+            }
+
+            return resource;
+        } catch (MalformedURLException e) {
+            log.error("Invalid file path", e);
+            throw new BadRequestException("Invalid file path");
+        }
     }
 
     public String getContentType(String userId, String filename) {
@@ -146,7 +164,8 @@ public class FileService {
         }
     }
 
-    public void deleteFile(String userId, String filename) {
+    public void deleteFile(String filename) {
+        String userId = SecurityUtils.getCurrentUserId();
         try {
             Path filePath = Paths.get(uploadDir, userId, filename);
             Files.deleteIfExists(filePath);

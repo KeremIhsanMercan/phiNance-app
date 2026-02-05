@@ -37,6 +37,11 @@ public class FileController {
             @RequestParam(required = false) String token,
             Authentication authentication) {
 
+        // SECURITY: Prevent path traversal attacks
+        if (filename.contains("..") || filename.contains("//") || filename.contains("\\\\")) {
+            return ResponseEntity.badRequest().build();
+        }
+
         // Security: Get userId from authenticated session or validate token
         String currentUserId = null;
 
@@ -47,6 +52,7 @@ public class FileController {
                 currentUserId = SecurityUtils.getCurrentUserId();
             } catch (Exception e) {
                 // Not authenticated via session, will try token
+                log.debug("Could not get userId from session", e);
             }
         }
 
@@ -69,10 +75,13 @@ public class FileController {
             @PathVariable String userId,
             @PathVariable String filename) {
 
-        // Security: Always use the authenticated user's ID, ignore userId from path
+        // Security: Validate that the path userId matches the authenticated user
         String currentUserId = SecurityUtils.getCurrentUserId();
+        if (!userId.equals(currentUserId)) {
+            return ResponseEntity.status(403).build();
+        }
 
-        fileService.deleteFile(currentUserId, filename);
+        fileService.deleteFile(filename);
         return ResponseEntity.ok().build();
     }
 }

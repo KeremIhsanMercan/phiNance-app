@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface AccountRepository extends MongoRepository<Account, String> {
+public interface AccountRepository extends MongoRepository<Account, String>, AccountRepositoryCustom {
 
     List<Account> findByUserIdAndArchivedFalse(String userId);
 

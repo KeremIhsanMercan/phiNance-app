@@ -21,7 +21,7 @@ public class CategoryService {
 
     public Page<CategoryDto> getCategoriesPaginated(Pageable pageable) {
         String userId = SecurityUtils.getCurrentUserId();
-        return categoryRepository.findByUserIdOrIsDefaultTrue(userId, pageable)
+        return categoryRepository.findByUserIdOrIsDefaultTrueCaseInsensitive(userId, pageable)
                 .map(this::mapToDto);
     }
 
