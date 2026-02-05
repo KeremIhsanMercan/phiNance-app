@@ -104,23 +104,31 @@ public class FileService {
         }
     }
 
-    public Resource getFileWithAuth(String userId, String filename, String token, String authenticatedUser) {
-        // Check authentication - either from authenticated user or token
-        String validatedUser = null;
+    public Resource getFileWithAuth(String userId, String filename, String token, String authenticatedUserId) {
+        String validatedUserId = null;
 
-        if (authenticatedUser != null && !authenticatedUser.isEmpty()) {
-            validatedUser = authenticatedUser;
-        } else if (token != null && !token.isEmpty()) {
+        // If user is authenticated via session, use that
+        if (authenticatedUserId != null) {
+            validatedUserId = authenticatedUserId;
+        } // Otherwise, validate via token
+        else if (token != null && !token.isEmpty()) {
             try {
-                validatedUser = validateFileToken(token);
+                if (!jwtTokenProvider.validateToken(token)) {
+                    throw new BadRequestException("Invalid token");
+                }
+                // Token is valid, extract email and use it as userId
+                // (In this system, userId is the email)
+                validatedUserId = jwtTokenProvider.getEmailFromToken(token);
             } catch (Exception e) {
                 log.error("Invalid file token", e);
                 throw new BadRequestException("Invalid or expired token");
             }
+        } else {
+            throw new BadRequestException("Authentication required");
         }
 
-        // Security: Ensure user can only access their own files
-        if (validatedUser == null || !userId.equals(validatedUser)) {
+        // Security: Ensure the validated user matches the requested userId
+        if (!userId.equals(validatedUserId)) {
             throw new BadRequestException("Unauthorized access to file");
         }
 

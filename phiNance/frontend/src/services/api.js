@@ -147,5 +147,12 @@ export const filesApi = {
   },
   delete: (userId, filename) => api.delete(`/files/${userId}/${filename}`),
 };
+// Favorite Filters API
+export const favoriteFiltersApi = {
+  getAll: () => api.get('/favorite-filters'),
+  save: (name, filters) => api.post('/favorite-filters', { name, filters }),
+  delete: (filterId) => api.delete(`/favorite-filters/${filterId}`),
+};
+
 
 export default api;

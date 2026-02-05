@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { useTransactionsStore } from '../stores/transactionsStore';
 import { useAccountsStore } from '../stores/accountsStore';
-import { categoriesApi, filesApi, transactionsApi } from '../services/api';
+import { categoriesApi, filesApi, transactionsApi, favoriteFiltersApi } from '../services/api';
 import { useCurrencyFormatter } from '../utils/currency';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -24,6 +24,7 @@ import {
   MagnifyingGlassIcon,
   ChevronUpIcon,
   ChevronDownIcon,
+  StarIcon,
 } from '@heroicons/react/24/outline';
 
 const transactionTypes = [
@@ -47,8 +48,9 @@ export default function Transactions() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
-  const [deletingTransactionId, setDeletingTransactionId] = useState(null);
+  const [deletingTransaction, setDeletingTransaction] = useState(null);
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [newlyUploadedFiles, setNewlyUploadedFiles] = useState([]); // Track files uploaded in current session
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
@@ -61,6 +63,7 @@ export default function Transactions() {
     amountMin: '',
     amountMax: '',
   });
+  const [savedFilters, setSavedFilters] = useState([]);
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
 
@@ -75,7 +78,18 @@ export default function Transactions() {
   useEffect(() => {
     fetchAccounts();
     fetchCategories();
+    // Load saved filters from backend
+    loadSavedFiltersFromBackend();
   }, []);
+
+  const loadSavedFiltersFromBackend = async () => {
+    try {
+      const response = await favoriteFiltersApi.getAll();
+      setSavedFilters(response.data || []);
+    } catch (error) {
+      console.error('Failed to load favorite filters:', error);
+    }
+  };
 
   useEffect(() => {
     if (!isModalOpen || editingTransaction) return;
@@ -126,6 +140,7 @@ export default function Transactions() {
   const openCreateModal = () => {
     setEditingTransaction(null);
     setUploadedFiles([]);
+    setNewlyUploadedFiles([]); // Reset tracker for new session
     reset({
       type: 'EXPENSE',
       amount: '',
@@ -141,6 +156,7 @@ export default function Transactions() {
   const openEditModal = (transaction) => {
     setEditingTransaction(transaction);
     setUploadedFiles(transaction.attachmentUrls || []);
+    setNewlyUploadedFiles([]); // Reset tracker for edit session
     reset({
       type: transaction.type,
       amount: transaction.amount,
@@ -155,10 +171,30 @@ export default function Transactions() {
     setIsModalOpen(true);
   };
 
-  const closeModal = () => {
+  const closeModal = async (shouldCleanupFiles = true) => {
+    // If we were creating a new transaction (not editing) and uploaded files, clean them up
+    // Only cleanup if shouldCleanupFiles is true (i.e., user cancelled without saving)
+    if (shouldCleanupFiles && !editingTransaction && newlyUploadedFiles.length > 0) {
+      // Delete all newly uploaded files since transaction wasn't created
+      const deletePromises = newlyUploadedFiles.map(async (fileUrl) => {
+        try {
+          const urlMatch = fileUrl.match(/\/api\/files\/([^\\/]+)\/([^?]+)/);
+          if (urlMatch) {
+            const userId = urlMatch[1];
+            const filename = decodeURIComponent(urlMatch[2]);
+            await filesApi.delete(userId, filename);
+          }
+        } catch (error) {
+          console.error('Failed to clean up file:', error);
+        }
+      });
+      await Promise.all(deletePromises);
+    }
+    
     setIsModalOpen(false);
     setEditingTransaction(null);
     setUploadedFiles([]);
+    setNewlyUploadedFiles([]);
     reset();
   };
 
@@ -189,9 +225,32 @@ export default function Transactions() {
     setUploadingFiles(true);
     try {
       const response = await filesApi.upload(files);
-      setUploadedFiles([...uploadedFiles, ...response.data]);
+      const newUploadedFiles = [...uploadedFiles, ...response.data];
+      setUploadedFiles(newUploadedFiles);
+      
+      // Track newly uploaded files only when creating (not editing)
+      if (!editingTransaction) {
+        setNewlyUploadedFiles(prev => [...prev, ...response.data]);
+      }
+      
       toast.success('Files uploaded successfully');
       e.target.value = ''; // Reset file input after success
+      
+      // If editing a transaction, automatically update it
+      if (editingTransaction) {
+        const currentFormData = watch();
+        const payload = {
+          ...currentFormData,
+          amount: parseFloat(currentFormData.amount),
+          categoryId: currentFormData.categoryId || null,
+          transferToAccountId: currentFormData.type === 'TRANSFER' ? (currentFormData.transferToAccountId || editingTransaction?.transferToAccountId) : null,
+          recurrencePattern: currentFormData.recurring ? currentFormData.recurrencePattern : null,
+          attachmentUrls: newUploadedFiles,
+        };
+        await updateTransaction(editingTransaction.id, payload);
+        toast.success('Transaction updated with new attachments');
+        fetchTransactions(buildQueryParams());
+      }
     } catch (error) {
       console.log('file upload error', error);
       toast.error(error.response?.data?.message || 'Failed to upload files');
@@ -205,14 +264,35 @@ export default function Transactions() {
     try {
       // Extract userId and filename from URL
       // URL format: /api/files/{userId}/{filename}?token=xxx
-      const urlMatch = fileUrl.match(/\/api\/files\/([^\/]+)\/([^?]+)/);
+      const urlMatch = fileUrl.match(/\/api\/files\/([^\\/]+)\/([^?]+)/);
       if (urlMatch) {
         const userId = urlMatch[1];
         const filename = decodeURIComponent(urlMatch[2]);
         
         await filesApi.delete(userId, filename);
-        setUploadedFiles(uploadedFiles.filter(url => url !== fileUrl));
+        const newUploadedFiles = uploadedFiles.filter(url => url !== fileUrl);
+        setUploadedFiles(newUploadedFiles);
+        
+        // Also remove from newly uploaded files tracker
+        setNewlyUploadedFiles(newlyUploadedFiles.filter(url => url !== fileUrl));
+        
         toast.success('File deleted successfully');
+        
+        // If editing a transaction, automatically update it
+        if (editingTransaction) {
+          const currentFormData = watch();
+          const payload = {
+            ...currentFormData,
+            amount: parseFloat(currentFormData.amount),
+            categoryId: currentFormData.categoryId || null,
+            transferToAccountId: currentFormData.type === 'TRANSFER' ? (currentFormData.transferToAccountId || editingTransaction?.transferToAccountId) : null,
+            recurrencePattern: currentFormData.recurring ? currentFormData.recurrencePattern : null,
+            attachmentUrls: newUploadedFiles,
+          };
+          await updateTransaction(editingTransaction.id, payload);
+          toast.success('Transaction updated');
+          fetchTransactions(buildQueryParams());
+        }
       } else {
         // If URL doesn't match expected format, just remove from state
         setUploadedFiles(uploadedFiles.filter(url => url !== fileUrl));
@@ -241,7 +321,7 @@ export default function Transactions() {
         await createTransaction(payload);
         toast.success('Transaction created successfully');
       }
-      closeModal();
+      closeModal(false); // Don't cleanup files since transaction was created successfully
       fetchTransactions(buildQueryParams());
     } catch (error) {
       toast.error(error.response?.data?.message || 'Operation failed');
@@ -250,12 +330,99 @@ export default function Transactions() {
 
   const handleDelete = async () => {
     try {
-      await deleteTransaction(deletingTransactionId);
+      // Delete attachments first if any exist
+      if (deletingTransaction?.attachmentUrls && deletingTransaction.attachmentUrls.length > 0) {
+        const deletePromises = deletingTransaction.attachmentUrls.map(async (fileUrl) => {
+          try {
+            const urlMatch = fileUrl.match(/\/api\/files\/([^\\/]+)\/([^?]+)/);
+            if (urlMatch) {
+              const userId = urlMatch[1];
+              const filename = decodeURIComponent(urlMatch[2]);
+              await filesApi.delete(userId, filename);
+            }
+          } catch (error) {
+            console.error('Failed to delete attachment:', error);
+          }
+        });
+        await Promise.all(deletePromises);
+      }
+      
+      // Then delete the transaction
+      await deleteTransaction(deletingTransaction.id);
       toast.success('Transaction deleted successfully');
       setIsDeleteDialogOpen(false);
-      setDeletingTransactionId(null);
+      setDeletingTransaction(null);
     } catch (error) {
       toast.error('Failed to delete transaction');
+    }
+  };
+
+  const generateFilterName = () => {
+    const parts = [];
+    if (filters.search) parts.push(`Search: "${filters.search}"`);
+    if (filters.type) parts.push(`Type: ${filters.type}`);
+    if (filters.accountId) {
+      const account = accounts.find(a => a.id === filters.accountId);
+      if (account) parts.push(`Account: ${account.name}`);
+    }
+    if (filters.categoryId) {
+      const category = categories.find(c => c.id === filters.categoryId);
+      if (category) parts.push(`Category: ${category.name}`);
+    }
+    if (filters.dateFrom) parts.push(`From: ${filters.dateFrom}`);
+    if (filters.dateTo) parts.push(`To: ${filters.dateTo}`);
+    if (filters.amountMin) parts.push(`Min: ${filters.amountMin}`);
+    if (filters.amountMax) parts.push(`Max: ${filters.amountMax}`);
+    
+    return parts.length > 0 ? parts.join(' - ') : 'Unnamed Filter';
+  };
+
+  const isFilterActive = () => {
+    return Object.values(filters).some(value => value !== '');
+  };
+
+  const saveCurrentFilter = async () => {
+    try {
+      const filterName = generateFilterName();
+      const response = await favoriteFiltersApi.save(filterName, filters);
+      setSavedFilters([...savedFilters, response.data]);
+      toast.success('Filter saved successfully');
+    } catch (error) {
+      console.error('Failed to save filter:', error);
+      toast.error('Failed to save filter');
+    }
+  };
+
+  const loadSavedFilter = (savedFilterData) => {
+    setFilters(savedFilterData.filters);
+    toast.success(`Loaded filter: ${savedFilterData.name}`);
+  };
+
+  const deleteSavedFilter = async (filterId) => {
+    try {
+      await favoriteFiltersApi.delete(filterId);
+      setSavedFilters(savedFilters.filter(f => f.id !== filterId));
+      toast.success('Filter deleted');
+    } catch (error) {
+      console.error('Failed to delete filter:', error);
+      toast.error('Failed to delete filter');
+    }
+  };
+
+  const getMatchingSavedFilter = () => {
+    return savedFilters.find(savedFilter => 
+      JSON.stringify(savedFilter.filters) === JSON.stringify(filters)
+    );
+  };
+
+  const handleStarClick = () => {
+    const matchingFilter = getMatchingSavedFilter();
+    if (matchingFilter) {
+      // If current filters match a saved filter, remove it
+      deleteSavedFilter(matchingFilter.id);
+    } else {
+      // Otherwise, save current filters
+      saveCurrentFilter();
     }
   };
 
@@ -381,7 +548,59 @@ export default function Transactions() {
       {showFilters && (
         <div className="card mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Filters</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="font-semibold text-gray-900">Filters</h3>
+              {isFilterActive() && (
+                <button
+                  onClick={handleStarClick}
+                  className={`flex items-center gap-1 text-sm transition-colors ${
+                    getMatchingSavedFilter() 
+                      ? 'text-yellow-500 hover:text-yellow-600' 
+                      : 'text-gray-600 hover:text-yellow-500'
+                  }`}
+                  title={getMatchingSavedFilter() ? 'Remove favorite filter' : 'Save current filters'}
+                >
+                  {getMatchingSavedFilter() ? (
+                    <StarIcon className="h-5 w-5 fill-current" />
+                  ) : (
+                    <StarIcon className="h-5 w-5" />
+                  )}
+                </button>
+              )}
+              {savedFilters.length > 0 && (
+                <div className="relative group pb-1">
+                  <button className="text-sm text-primary-600 hover:text-primary-700 px-2 py-1 rounded hover:bg-primary-50">
+                    My Filters ({savedFilters.length})
+                  </button>
+                  <div className="hidden group-hover:block absolute left-0 top-full -mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-10 pt-2">
+                    <div className="max-h-64 overflow-y-auto">
+                      {savedFilters.map((savedFilter) => (
+                        <div
+                          key={savedFilter.id}
+                          className="flex items-center justify-between gap-2 p-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 group/item relative"
+                        >
+                          <button
+                            onClick={() => loadSavedFilter(savedFilter)}
+                            className="flex-1 min-w-0 text-left hover:text-primary-600 relative group/button"
+                            title={savedFilter.name}
+                          >
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {savedFilter.name}
+                            </p>
+                          </button>
+                          <button
+                            onClick={() => deleteSavedFilter(savedFilter.id)}
+                            className="text-gray-400 hover:text-red-600 flex-shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity"
+                          >
+                            <XMarkIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <button onClick={clearFilters} className="text-sm text-primary-600 hover:text-primary-700">
               Clear All
             </button>
@@ -640,7 +859,7 @@ export default function Transactions() {
                           </button>
                           <button
                             onClick={() => {
-                              setDeletingTransactionId(transaction.id);
+                              setDeletingTransaction(transaction);
                               setIsDeleteDialogOpen(true);
                             }}
                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"

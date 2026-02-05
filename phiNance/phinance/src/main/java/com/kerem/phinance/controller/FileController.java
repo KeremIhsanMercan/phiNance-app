@@ -1,5 +1,6 @@
 package com.kerem.phinance.controller;
 
+import com.kerem.phinance.security.SecurityUtils;
 import com.kerem.phinance.service.FileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,11 +37,20 @@ public class FileController {
             @RequestParam(required = false) String token,
             Authentication authentication) {
 
-        String authenticatedUser = authentication != null && authentication.isAuthenticated()
-                ? authentication.getName()
-                : null;
+        // Security: Get userId from authenticated session or validate token
+        String currentUserId = null;
 
-        Resource resource = fileService.getFileWithAuth(userId, filename, token, authenticatedUser);
+        // Try to get from authenticated session first
+        if (authentication != null && authentication.isAuthenticated()
+                && !"anonymousUser".equals(authentication.getPrincipal())) {
+            try {
+                currentUserId = SecurityUtils.getCurrentUserId();
+            } catch (Exception e) {
+                // Not authenticated via session, will try token
+            }
+        }
+
+        Resource resource = fileService.getFileWithAuth(userId, filename, token, currentUserId);
 
         if (resource == null) {
             return ResponseEntity.notFound().build();
@@ -57,15 +67,12 @@ public class FileController {
     @DeleteMapping("/{userId}/{filename:.+}")
     public ResponseEntity<Void> deleteFile(
             @PathVariable String userId,
-            @PathVariable String filename,
-            Authentication authentication) {
+            @PathVariable String filename) {
 
-        // Security: Ensure user can only delete their own files
-        if (!userId.equals(authentication.getName())) {
-            return ResponseEntity.status(403).build();
-        }
+        // Security: Always use the authenticated user's ID, ignore userId from path
+        String currentUserId = SecurityUtils.getCurrentUserId();
 
-        fileService.deleteFile(userId, filename);
+        fileService.deleteFile(currentUserId, filename);
         return ResponseEntity.ok().build();
     }
 }

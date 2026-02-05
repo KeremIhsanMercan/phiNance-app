@@ -71,7 +71,6 @@ public class TransactionRepositoryImpl implements TransactionRepositoryCustom {
         }
 
         // Note: Amount filtering is handled in aggregation pipeline for string-to-number conversion
-
         // Apply search query filter (search in description)
         if (searchQuery != null && !searchQuery.isEmpty()) {
             criteria.add(Criteria.where("description").regex(searchQuery, "i"));
@@ -93,17 +92,17 @@ public class TransactionRepositoryImpl implements TransactionRepositoryCustom {
             String searchQuery,
             Pageable pageable
     ) {
-        List<Criteria> criteriaList = buildCriteria(userId, startDate, endDate, accountId, categoryId, 
+        List<Criteria> criteriaList = buildCriteria(userId, startDate, endDate, accountId, categoryId,
                 type, null, null, searchQuery); // Don't pass amount filters to criteria
 
-        Criteria combinedCriteria = criteriaList.isEmpty() 
-                ? new Criteria() 
+        Criteria combinedCriteria = criteriaList.isEmpty()
+                ? new Criteria()
                 : new Criteria().andOperator(criteriaList.toArray(new Criteria[0]));
 
         // Check if we need to use aggregation (for amount sorting or filtering)
         boolean sortByAmount = pageable.getSort().stream()
                 .anyMatch(order -> "amount".equals(order.getProperty()));
-        boolean hasAmountFilter = (minAmount != null && minAmount.compareTo(BigDecimal.ZERO) > 0) 
+        boolean hasAmountFilter = (minAmount != null && minAmount.compareTo(BigDecimal.ZERO) > 0)
                 || (maxAmount != null && maxAmount.compareTo(BigDecimal.ZERO) > 0);
 
         if (sortByAmount || hasAmountFilter) {
@@ -114,10 +113,10 @@ public class TransactionRepositoryImpl implements TransactionRepositoryCustom {
                     .orElse(null);
 
             List<org.springframework.data.mongodb.core.aggregation.AggregationOperation> operations = new ArrayList<>();
-            
+
             // Match criteria
             operations.add(match(combinedCriteria));
-            
+
             // Add computed field for numeric amount
             operations.add(project()
                     .andExpression("userId").as("userId")
@@ -137,31 +136,31 @@ public class TransactionRepositoryImpl implements TransactionRepositoryCustom {
                     .andExpression("createdAt").as("createdAt")
                     .andExpression("updatedAt").as("updatedAt")
                     .andExpression("_id").as("_id"));
-            
+
             // Apply amount filtering if needed
             if (hasAmountFilter) {
-                Criteria amountCriteria = new Criteria();
+                Criteria amountCriteria = Criteria.where("amountNumeric");
                 if (minAmount != null && minAmount.compareTo(BigDecimal.ZERO) > 0) {
-                    amountCriteria = amountCriteria.and("amountNumeric").gte(minAmount.doubleValue());
+                    amountCriteria = amountCriteria.gte(minAmount.doubleValue());
                 }
                 if (maxAmount != null && maxAmount.compareTo(BigDecimal.ZERO) > 0) {
-                    amountCriteria = amountCriteria.and("amountNumeric").lte(maxAmount.doubleValue());
+                    amountCriteria = amountCriteria.lte(maxAmount.doubleValue());
                 }
                 operations.add(match(amountCriteria));
             }
-            
+
             // Apply sorting
             if (amountOrder != null) {
                 operations.add(sort(amountOrder.getDirection(), "amountNumeric"));
             } else if (pageable.getSort().isSorted()) {
                 operations.add(sort(pageable.getSort()));
             }
-            
+
             // Count total before pagination
             Aggregation countAggregation = Aggregation.newAggregation(operations);
             long total = mongoTemplate.aggregate(countAggregation, "transactions", Transaction.class)
                     .getMappedResults().size();
-            
+
             // Add pagination
             operations.add(skip((long) pageable.getPageNumber() * pageable.getPageSize()));
             operations.add(limit(pageable.getPageSize()));
@@ -200,17 +199,17 @@ public class TransactionRepositoryImpl implements TransactionRepositoryCustom {
             String searchQuery,
             Sort sort
     ) {
-        List<Criteria> criteriaList = buildCriteria(userId, startDate, endDate, accountId, categoryId, 
+        List<Criteria> criteriaList = buildCriteria(userId, startDate, endDate, accountId, categoryId,
                 type, null, null, searchQuery); // Don't pass amount filters to criteria
 
-        Criteria combinedCriteria = criteriaList.isEmpty() 
-                ? new Criteria() 
+        Criteria combinedCriteria = criteriaList.isEmpty()
+                ? new Criteria()
                 : new Criteria().andOperator(criteriaList.toArray(new Criteria[0]));
 
         // Check if we need to use aggregation (for amount sorting or filtering)
         boolean sortByAmount = sort.stream()
                 .anyMatch(order -> "amount".equals(order.getProperty()));
-        boolean hasAmountFilter = (minAmount != null && minAmount.compareTo(BigDecimal.ZERO) > 0) 
+        boolean hasAmountFilter = (minAmount != null && minAmount.compareTo(BigDecimal.ZERO) > 0)
                 || (maxAmount != null && maxAmount.compareTo(BigDecimal.ZERO) > 0);
 
         if (sortByAmount || hasAmountFilter) {
@@ -221,7 +220,7 @@ public class TransactionRepositoryImpl implements TransactionRepositoryCustom {
                     .orElse(null);
 
             List<org.springframework.data.mongodb.core.aggregation.AggregationOperation> operations = new ArrayList<>();
-            
+
             operations.add(match(combinedCriteria));
             operations.add(project()
                     .andExpression("userId").as("userId")
@@ -241,19 +240,19 @@ public class TransactionRepositoryImpl implements TransactionRepositoryCustom {
                     .andExpression("createdAt").as("createdAt")
                     .andExpression("updatedAt").as("updatedAt")
                     .andExpression("_id").as("_id"));
-            
+
             // Apply amount filtering if needed
             if (hasAmountFilter) {
-                Criteria amountCriteria = new Criteria();
+                Criteria amountCriteria = Criteria.where("amountNumeric");
                 if (minAmount != null && minAmount.compareTo(BigDecimal.ZERO) > 0) {
-                    amountCriteria = amountCriteria.and("amountNumeric").gte(minAmount.doubleValue());
+                    amountCriteria = amountCriteria.gte(minAmount.doubleValue());
                 }
                 if (maxAmount != null && maxAmount.compareTo(BigDecimal.ZERO) > 0) {
-                    amountCriteria = amountCriteria.and("amountNumeric").lte(maxAmount.doubleValue());
+                    amountCriteria = amountCriteria.lte(maxAmount.doubleValue());
                 }
                 operations.add(match(amountCriteria));
             }
-            
+
             // Apply sorting
             if (amountOrder != null) {
                 operations.add(sort(amountOrder.getDirection(), "amountNumeric"));
